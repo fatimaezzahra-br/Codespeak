@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Exercices{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-extrabold">Exercices d'expression orale</h1>
+<p class="text-sm text-slate-500 mb-5">{{ 'Choisis un exercice et enregistre ta réponse en anglais.' if user.role == 'student' else 'Tous les exercices publiés pour la classe MGSI-1.' }}</p>
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for e in items %}
+  <div class="bg-white rounded-2xl p-5 shadow-sm flex flex-col {{ '' if e.is_active else 'opacity-60' }}">
+    <div class="flex justify-between text-[11px] font-mono">
+      <span class="bg-lav rounded px-2 py-0.5">{{ e.level }} · {{ e.duration }}s</span>
+      <span class="text-slate-400">{{ e.code }}</span>
+    </div>
+    <h3 class="font-bold mt-3">{{ e.title }}</h3>
+    <p class="text-xs text-slate-500 mt-1">{{ situations[e.situation][0] }}</p>
+    <div class="flex flex-wrap gap-1 mt-3">{% for k in e.keyword_list[:5] %}<span class="text-[11px] font-mono bg-emerald-50 text-emerald-700 rounded px-2 py-0.5">#{{ k }}</span>{% endfor %}</div>
+    <div class="mt-auto pt-4 flex items-center justify-between">
+      {% if user.role == 'student' and e.id in done %}<span class="text-xs font-semibold text-brand">Meilleur score : {{ '%.1f'|format(done[e.id]) }}/10</span>{% else %}<span></span>{% endif %}
+      <div class="flex gap-2">
+        {% if user.role == 'teacher' %}
+        <form method="post" action="{{ url_for('toggle_exercise', ex_id=e.id) }}"><button class="text-xs border border-slate-200 rounded-lg px-3 py-1.5">{{ 'Clôturer' if e.is_active else 'Rouvrir' }}</button></form>
+        {% endif %}
+        <a href="{{ url_for('exercise_detail', ex_id=e.id) }}" class="text-xs bg-brand text-white rounded-lg px-3 py-1.5 font-semibold">{{ 'Commencer' if user.role == 'student' else 'Aperçu' }}</a>
+      </div>
+    </div>
+  </div>
+  {% else %}<p class="text-slate-500">Aucun exercice pour le moment.</p>{% endfor %}
+</div>
+{% endblock %}

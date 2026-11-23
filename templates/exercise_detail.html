@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ ex.title }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('exercises') }}" class="text-sm text-slate-500">← Exercices</a>
+<div class="grid lg:grid-cols-2 gap-6 mt-3">
+  <section class="bg-white rounded-2xl p-6 shadow-sm">
+    <div class="flex gap-2 text-[11px] font-mono"><span class="bg-lav rounded px-2 py-0.5">{{ ex.code }}</span><span class="bg-lav rounded px-2 py-0.5">{{ ex.level }}</span><span class="bg-lav rounded px-2 py-0.5">{{ ex.duration }} s</span></div>
+    <h1 class="text-2xl font-extrabold mt-3">{{ ex.title }}</h1>
+    <p class="text-sm text-slate-500">{{ situations[ex.situation][0] }} — {{ situations[ex.situation][1] }}</p>
+    <h3 class="font-semibold mt-5 text-sm">Vocabulaire technique à utiliser</h3>
+    <div class="flex flex-wrap gap-2 mt-2">{% for k in ex.keyword_list %}<span class="font-mono text-xs bg-emerald-50 text-emerald-700 rounded px-2 py-1">{{ k }}</span>{% endfor %}</div>
+    <h3 class="font-semibold mt-5 text-sm">Consignes</h3>
+    <p class="text-sm text-slate-600 mt-1">{{ ex.instructions or 'Structurez votre discours : problème, hypothèse technique, solution.' }}</p>
+  </section>
+
+  <section class="bg-white rounded-2xl p-6 shadow-sm">
+    {% if user.role == 'student' %}
+    <div id="recorder" data-submit-url="{{ url_for('submit', ex_id=ex.id) }}" data-max="{{ ex.duration }}">
+      <div class="text-center">
+        <div id="timer" class="font-mono text-4xl font-bold">00:00</div>
+        <div class="text-xs text-slate-400">Temps alloué : {{ ex.duration }} s</div>
+        <button id="rec-btn" type="button" class="mt-5 w-20 h-20 rounded-full bg-brand text-white text-3xl shadow-lg hover:opacity-90">🎙</button>
+        <p id="status" class="text-sm text-slate-500 mt-3">Clique pour commencer l'enregistrement.</p>
+      </div>
+      <details class="mt-5 text-sm">
+        <summary class="cursor-pointer text-slate-500">Le micro ne marche pas ? Écrire le texte à la place</summary>
+        <textarea id="manual" rows="5" class="mt-2 w-full border border-slate-200 rounded-lg p-3" placeholder="Écris ici ta réponse en anglais..."></textarea>
+        <button id="send-text" type="button" class="mt-2 bg-brand text-white rounded-lg px-4 py-2 text-sm font-semibold">Envoyer le texte</button>
+      </details>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">Aperçu enseignant : l'enregistrement est réservé aux étudiants.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>{% endblock %}

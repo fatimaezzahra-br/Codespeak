@@ -1,0 +1,9 @@
+{% macro score_pill(score) %}
+  {% if score is not none %}
+  <span class="inline-block rounded-full px-3 py-1 text-sm font-bold {{ 'bg-brand text-white' if score >= 8 else 'bg-lav text-ink' if score >= 6.5 else 'bg-amber-100 text-amber-800' }}">{{ '%.1f'|format(score) }}<span class="text-[10px] font-normal opacity-80">/10</span></span>
+  {% endif %}
+{% endmacro %}
+
+{% macro chip(text, kind='gray') %}
+  <span class="inline-block rounded px-2 py-0.5 text-[11px] font-mono {{ 'bg-emerald-100 text-emerald-800' if kind == 'ok' else 'bg-red-100 text-red-700' if kind == 'bad' else 'bg-lav text-slate-700' }}">{{ text }}</span>
+{% endmacro %}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CodeSpeak{% endblock %} · ENSIASD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { brand: { DEFAULT: '#00694a', soft: '#d4f5e6' }, ink: '#161b2e', lav: '#e6e8ff' },
+      fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] } } } }
+  </script>
+  <style>body { background: #f8f8ff; }</style>
+</head>
+<body class="font-sans text-ink">
+{% block nav %}
+{% set ep = request.endpoint %}
+<header class="bg-white/90 backdrop-blur border-b border-slate-100 sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-brand text-white grid place-items-center font-mono text-sm">&gt;_</div>
+      <span class="font-bold text-lg">CodeSpeak</span>
+      <span class="hidden sm:inline text-[11px] font-mono bg-lav rounded-full px-3 py-1">ENSIASD · MGSI-1</span>
+    </div>
+    {% set tabs = [] %}
+    {% if user.role == 'teacher' %}{% set _ = tabs.append((['teacher_dashboard'], url_for('teacher_dashboard'), 'Dashboard Enseignant')) %}{% endif %}
+    {% set _ = tabs.append((['exercises','exercise_detail'], url_for('exercises'), 'Exercice Oral')) %}
+    {% set _ = tabs.append((['feedback','feedback_latest'], url_for('feedback_latest'), 'Évaluation & Feedback')) %}
+    {% set _ = tabs.append((['progress'], url_for('progress'), 'Progression & Analytics')) %}
+    <nav class="flex gap-1 text-sm font-semibold">
+      {% for eps, href, label in tabs %}
+      <a href="{{ href }}" class="px-3 py-2 rounded-lg {{ 'bg-lav text-brand' if ep in eps else 'text-slate-600 hover:bg-slate-100' }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="flex items-center gap-3 text-sm">
+      <div class="text-right leading-tight">
+        <div class="font-semibold">{{ user.full_name }}</div>
+        <div class="font-mono text-[11px] text-brand">{{ 'Mode Enseignant' if user.role == 'teacher' else 'Mode Étudiant' }}</div>
+      </div>
+      <a href="{{ url_for('logout') }}" class="text-xs bg-lav rounded-full px-3 py-1.5 font-semibold hover:bg-slate-200">Déconnexion</a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}
+    <div class="mb-4 rounded-xl px-4 py-3 text-sm font-medium {{ 'bg-emerald-50 text-emerald-800' if cat == 'ok' else 'bg-red-50 text-red-700' }}">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

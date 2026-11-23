@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_pill %}
+{% block title %}Progression{% endblock %}
+{% block content %}
+<section class="bg-gradient-to-r from-lav/60 to-emerald-50 rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4">
+  <div class="flex items-center gap-4">
+    <div class="w-16 h-16 rounded-2xl bg-white grid place-items-center text-xl font-bold">{{ student.initials }}</div>
+    <div><span class="text-[11px] font-mono bg-lav rounded px-2 py-0.5">MGSI-1 CI · PROMOTION 2024-2025</span>
+      <h1 class="text-3xl font-extrabold">Progression & Évolution Orale</h1>
+      <p class="text-sm text-slate-500"><b>{{ student.full_name }}</b> / ENSIASD Taroudant</p></div>
+  </div>
+  <div class="flex gap-2 items-center">
+    {% if user.role == 'teacher' %}
+    <form method="get"><select name="student_id" onchange="this.form.submit()" class="bg-white rounded-lg px-3 py-2 text-sm border border-slate-200">
+      {% for st in students %}<option value="{{ st.id }}" {{ 'selected' if st.id == student.id }}>{{ st.full_name }}</option>{% endfor %}</select></form>
+    {% else %}<a href="{{ url_for('exercises') }}" class="bg-brand text-white rounded-lg px-4 py-2 text-sm font-semibold">Session d'exercice suivante</a>{% endif %}
+  </div>
+</section>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+  <div class="bg-white rounded-2xl p-5 shadow-sm"><p class="text-[11px] font-mono text-slate-400">SCORE GLOBAL MOYEN</p><p class="text-4xl font-extrabold mt-2">{{ avg }} <span class="text-sm font-normal text-slate-400">/ 10</span></p></div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm"><p class="text-[11px] font-mono text-slate-400">PALIER CECRL VALIDÉ</p><p class="text-4xl font-extrabold mt-2 text-indigo-600">{{ level }}</p></div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm"><p class="text-[11px] font-mono text-slate-400">SESSIONS AUDIO TRAITÉES</p><p class="text-4xl font-extrabold mt-2">{{ subs|length }} <span class="text-sm font-normal text-slate-400">enregistrements</span></p></div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm"><p class="text-[11px] font-mono text-slate-400">LEXIQUE CS ASSIMILÉ</p><p class="text-4xl font-extrabold mt-2">{{ n_terms }} <span class="text-sm font-normal text-slate-400">termes clés</span></p></div>
+</div>
+
+<section class="bg-white rounded-2xl p-6 shadow-sm mt-6">
+  <p class="text-[11px] font-mono text-brand font-bold">COURBE D'APPRENTISSAGE TEMPORELLE</p>
+  <h2 class="text-xl font-extrabold">Trajectoire de maîtrise orale ({{ subs|length }} sessions)</h2>
+  <div class="h-72 mt-4"><canvas id="chart"></canvas></div>
+</section>
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+  {% for label, key, c in criteria %}
+  <div class="bg-white rounded-2xl p-5 shadow-sm">
+    <div class="flex justify-between items-start"><b class="text-sm">{{ label }}</b><span class="text-xl font-extrabold">{{ c.avg }}<span class="text-xs text-slate-400">/10</span></span></div>
+    <div class="h-1.5 bg-lav rounded-full mt-3"><div class="h-1.5 rounded-full bg-brand" style="width: {{ c.avg * 10 }}%"></div></div>
+    <p class="text-xs font-mono text-brand mt-2">{{ '+' if c.delta >= 0 }}{{ c.delta }} pt depuis la 1re session</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% if last_comment %}
+<section class="bg-white rounded-2xl p-5 shadow-sm mt-6 border-l-4 border-brand">
+  <div class="flex justify-between"><b>Recommandation pédagogique personnalisée</b><span class="text-xs text-slate-400">{{ last_comment.created_at.strftime('%d/%m/%Y') }}</span></div>
+  <p class="italic text-slate-600 mt-2">« {{ last_comment.teacher_comment }} »</p>
+  <p class="text-xs text-slate-400 mt-2">Prof. Mohammed Nid Hssan · Coordinateur du module</p>
+</section>
+{% endif %}
+
+<section class="bg-white rounded-2xl p-6 shadow-sm mt-6">
+  <h2 class="text-xl font-extrabold">Journal détaillé des sessions enregistrées</h2>
+  <div class="overflow-x-auto mt-3"><table class="w-full text-sm">
+    <thead class="text-[11px] text-slate-400 uppercase text-left"><tr><th class="py-2">Session</th><th>Exercice</th><th>Date</th><th>Durée & WPM</th><th>Score</th><th>Rapport</th></tr></thead>
+    <tbody class="divide-y divide-slate-100">
+    {% for s in subs|reverse %}
+      <tr><td class="py-3 font-mono text-brand">#{{ subs|length - loop.index0 }}</td>
+        <td><b>{{ s.exercise.title }}</b></td><td class="font-mono text-xs">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
+        <td class="font-mono text-xs">{{ s.duration }}s<br>{{ s.wpm }} WPM</td>
+        <td>{{ score_pill(s.score_global) }} <span class="text-[11px] font-mono">{{ level_from_score(s.score_global) }}</span></td>
+        <td><a href="{{ url_for('feedback', sub_id=s.id) }}" class="text-xs bg-lav rounded-lg px-3 py-1.5 font-semibold">Rapport IA</a></td></tr>
+    {% else %}<tr><td colspan="6" class="py-6 text-center text-slate-400">Aucune session pour le moment.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  const data = {{ chart|tojson }};
+  new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: { labels: data.labels, datasets: [
+      { label: 'Score de la séance', data: data.scores, borderColor: '#00694a', backgroundColor: 'rgba(0,105,74,.15)', fill: true, tension: .35, pointBackgroundColor: '#fff', pointBorderColor: '#00694a', pointRadius: 5 },
+      { label: 'Objectif C1 (8.5)', data: data.scores.map(() => 8.5), borderColor: '#6ee7b7', borderDash: [6, 6], pointRadius: 0, fill: false }
+    ]},
+    options: { maintainAspectRatio: false, scales: { y: { min: 0, max: 10 } } }
+  });
+</script>
+{% endblock %}
