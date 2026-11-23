@@ -14,22 +14,53 @@ FILLERS = ["um", "uh", "uhm", "erm", "euh", "you know"]
 # ---------- 1. Transcription ----------
 
 
-def transcribe(path):
-    """Transcrit un fichier audio avec Whisper. Retourne "" si indisponible."""
-    if not Config.OPENAI_API_KEY:
-        return ""
-    try:
-        from openai import OpenAI
 
-        client = OpenAI(api_key=Config.OPENAI_API_KEY)
-        with open(path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model="whisper-1", file=f, language="en"
+_whisper_model = None
+
+
+def transcribe(path):
+    """Transcrit un fichier audio avec OpenAI ou faster-whisper local."""
+    global _whisper_model
+
+    # 1. Essayer OpenAI si une clé API existe
+    if Config.OPENAI_API_KEY:
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=Config.OPENAI_API_KEY)
+            with open(path, "rb") as f:
+                result = client.audio.transcriptions.create(
+                    model="whisper-1", file=f, language="en"
+                )
+            return result.text.strip()
+        except Exception as e:
+            print("Erreur OpenAI, utilisation du modèle local :", e)
+
+    # 2. Transcription locale avec faster-whisper
+    try:
+        from faster_whisper import WhisperModel
+
+        if _whisper_model is None:
+            print("Chargement du modèle Whisper local...")
+            _whisper_model = WhisperModel(
+                "base",
+                device="cpu",
+                compute_type="int8"
             )
-        return result.text.strip()
-    except Exception as e:  # on ne bloque jamais l'application
-        print("Erreur transcription :", e)
+
+        segments, info = _whisper_model.transcribe(
+            path,
+            language="en",
+            vad_filter=True
+        )
+
+        transcript = " ".join(segment.text.strip() for segment in segments)
+        return transcript.strip()
+
+    except Exception as e:
+        print("Erreur transcription locale :", e)
         return ""
+
 
 
 # ---------- 2. Statistiques simples (toujours calculees localement) ----------
