@@ -19,6 +19,10 @@ class User(db.Model):
     role = db.Column(db.String(10), nullable=False)  # "teacher" ou "student"
     student_code = db.Column(db.String(30))
 
+    # Lien vers l'enseignant référent (pour les étudiants)
+    teacher_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    students = db.relationship("User", backref=db.backref("teacher", remote_side=[id]))
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 

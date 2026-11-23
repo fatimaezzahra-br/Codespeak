@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Inscription{% endblock %}
+{% block nav %}{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[1fr_1.2fr] gap-6 max-w-5xl mx-auto mt-6">
+  <aside class="bg-lav/70 rounded-2xl p-8 hidden lg:flex flex-col justify-between">
+    <div>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-brand text-white grid place-items-center font-mono">&gt;_</div>
+        <div>
+          <div class="font-bold text-lg">CodeSpeak</div>
+          <div class="text-[11px] font-mono text-slate-500">ENSIASD • LABORATOIRE MGSI</div>
+        </div>
+      </div>
+      <h2 class="text-2xl font-bold">Oral Mastery for Engineers</h2>
+      <p class="text-sm text-slate-600 mt-2">Plateforme interactive d'anglais professionnel dédiée au cycle ingénieur de l'ENSIASD.</p>
+      <div class="bg-white rounded-xl p-4 mt-6">
+        <b class="text-sm">Communication Technique</b>
+        <p class="text-xs text-slate-500">System design pitch, architectural defense & analyse de la parole.</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 mt-3">
+        <b class="text-sm">Évaluation Continue par IA</b>
+        <p class="text-xs text-slate-500">Notation automatisée du vocabulaire et de la grammaire.</p>
+      </div>
+    </div>
+    <p class="text-[11px] font-mono text-slate-500">CYCLE INGÉNIEUR • S2 · MGSI-1</p>
+  </aside>
+
+  <section class="bg-white rounded-2xl p-8 shadow-sm">
+    <p class="text-[11px] font-mono font-bold text-brand">PORTAIL D'INSCRIPTION</p>
+    <h1 class="text-3xl font-extrabold mb-5">Créer un compte MGSI</h1>
+
+    <form method="post" action="{{ url_for('register') }}" class="space-y-4">
+      <div class="grid grid-cols-2 gap-1 bg-lav/60 rounded-xl p-1 text-sm font-semibold">
+        <label>
+          <input type="radio" name="profile" value="teacher" class="peer sr-only" onchange="toggleTeacherField()">
+          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Enseignant</div>
+        </label>
+        <label>
+          <input type="radio" name="profile" value="student" class="peer sr-only" checked onchange="toggleTeacherField()">
+          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Élève Ingénieur</div>
+        </label>
+      </div>
+
+      <label class="block text-sm font-semibold">Nom complet
+        <input id="name" name="name" type="text" required
+               class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+               placeholder="Prénom et Nom">
+      </label>
+
+      <label class="block text-sm font-semibold">Email institutionnel ENSIASD
+        <input id="email" name="email" type="email" required autocomplete="email"
+               class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+               placeholder="prenom.nom@ensiasd.ac.ma">
+      </label>
+
+      <div id="teacher-select-box">
+        <label class="block text-sm font-semibold">Professeur référent
+          <select id="teacher_id" name="teacher_id"
+                  class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900">
+            <option value="">-- Choisir votre professeur --</option>
+            {% for t in teachers %}
+              <option value="{{ t.id }}">{{ t.full_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <label class="block text-sm font-semibold">Mot de passe académique
+        <input id="pwd" name="password" type="password" required minlength="6" autocomplete="new-password"
+               class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+               placeholder="••••••••">
+      </label>
+
+      <button type="submit" class="w-full bg-brand text-white font-semibold rounded-lg py-3 hover:opacity-90 transition">
+        Créer mon compte MGSI →
+      </button>
+    </form>
+
+    <p class="text-center text-sm text-slate-600 mt-5">
+      Déjà inscrit sur la plateforme ?
+      <a href="{{ url_for('login') }}" class="font-semibold text-brand hover:underline">Se connecter</a>
+    </p>
+  </section>
+</div>
+
+<script>
+  function toggleTeacherField() {
+    const isStudent = document.querySelector('input[name="profile"][value="student"]').checked;
+    const box = document.getElementById('teacher-select-box');
+    const select = document.getElementById('teacher_id');
+    box.style.display = isStudent ? 'block' : 'none';
+    select.required = isStudent;
+    if (!isStudent) {
+      select.value = '';
+    }
+  }
+  toggleTeacherField();
+</script>
+{% endblock %}

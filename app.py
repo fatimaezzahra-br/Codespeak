@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -88,8 +89,50 @@ def login_required(role=None):
             return f(*args, **kwargs)
         return wrapper
     return deco
+#nouveau user
 
 
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    teachers = User.query.filter_by(role="teacher").order_by(User.full_name).all()
+
+    if request.method == "POST":
+        full_name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        role = request.form.get("profile", "student")
+        teacher_id = request.form.get("teacher_id", "").strip()
+
+        if role not in ("teacher", "student"):
+            role = "student"
+
+        if not email.endswith("@ensiasd.ac.ma"):
+            flash("Veuillez utiliser votre email institutionnel (@ensiasd.ac.ma).", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        if User.query.filter_by(email=email).first():
+            flash("Cet email est déjà utilisé.", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        if role == "student" and not teacher_id:
+            flash("Veuillez sélectionner votre professeur référent.", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        new_user = User(
+            full_name=full_name,
+            email=email,
+            role=role,
+            teacher_id=int(teacher_id) if (role == "student" and teacher_id) else None,
+        )
+        new_user.set_password(password)
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash("Compte créé avec succès ! Connectez-vous maintenant.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("register.html", teachers=teachers)
 @app.before_request
 def load_user():
     uid = session.get("user_id")
@@ -140,24 +183,46 @@ def teacher_dashboard():
     flt = request.args.get("filter", "all")
     search = request.args.get("q", "").strip()
     now = datetime.utcnow()
+    teacher_id = g.user.id
 
-    n_students = User.query.filter_by(role="student").count()
-    n_active = Exercise.query.filter_by(is_active=True).count()
-    n_week = Exercise.query.filter(Exercise.created_at >= now - timedelta(days=7)).count()
-    subs = Submission.query.all()
-    avg = db.session.query(func.avg(Submission.score_global)).scalar() or 0
-    rates = [len(s.found_list) / (len(s.found_list) + len(s.missed_list))
-             for s in subs if s.found_list or s.missed_list]
+    # 1. Statistiques filtrées uniquement pour l'enseignant connecté
+    n_students = User.query.filter_by(role="student", teacher_id=teacher_id).count()
+    teacher_exercises = Exercise.query.filter_by(created_by=teacher_id)
+    n_active = teacher_exercises.filter_by(is_active=True).count()
+    n_week = teacher_exercises.filter(Exercise.created_at >= now - timedelta(days=7)).count()
+
+    # 2. Requête de base pour les soumissions liées aux exercices de cet enseignant
+    base = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+    )
+
+    subs = base.all()
+    avg = (
+        db.session.query(func.avg(Submission.score_global))
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .scalar()
+        or 0
+    )
+    rates = [
+        len(s.found_list) / (len(s.found_list) + len(s.missed_list))
+        for s in subs
+        if s.found_list or s.missed_list
+    ]
     expected = max(1, n_active * n_students)
     stats = dict(
-        n_active=n_active, n_week=n_week, n_subs=len(subs), avg=round(avg, 1),
+        n_active=n_active,
+        n_week=n_week,
+        n_subs=len(subs),
+        avg=round(avg, 1),
         return_rate=min(100, round(100 * len(subs) / expected)),
         vocab=round(100 * sum(rates) / len(rates)) if rates else 0,
         n_students=n_students,
     )
 
-    base = (Submission.query.join(User, Submission.student_id == User.id)
-            .join(Exercise, Submission.exercise_id == Exercise.id))
+    # 3. Compteurs et filtres du tableau des soumissions
     counts = {
         "all": base.count(),
         "a_evaluer": base.filter(Submission.status == "a_evaluer").count(),
@@ -169,14 +234,22 @@ def teacher_dashboard():
     if search:
         like = f"%{search}%"
         q = q.filter(or_(User.full_name.ilike(like), Exercise.title.ilike(like)))
+
     rows = q.order_by(Submission.created_at.desc()).limit(50).all()
-    recent = Exercise.query.order_by(Exercise.created_at.desc()).limit(3).all()
+    recent = teacher_exercises.order_by(Exercise.created_at.desc()).limit(3).all()
 
-    return render_template("teacher_dashboard.html", stats=stats, rows=rows, counts=counts,
-                           flt=flt, search=search, recent=recent, n_students=n_students,
-                           situations=SITUATIONS, levels=LEVELS)
-
-
+    return render_template(
+        "teacher_dashboard.html",
+        stats=stats,
+        rows=rows,
+        counts=counts,
+        flt=flt,
+        search=search,
+        recent=recent,
+        n_students=n_students,
+        situations=SITUATIONS,
+        levels=LEVELS,
+    )
 @app.post("/teacher/exercises")
 @login_required("teacher")
 def create_exercise():
@@ -229,25 +302,42 @@ def review(sub_id):
 @app.route("/exercises")
 @login_required()
 def exercises():
-    q = Exercise.query
     if g.user.role == "student":
-        q = q.filter_by(is_active=True)
-    items = q.order_by(Exercise.created_at.desc()).all()
+        if g.user.teacher_id:
+            items = (
+                Exercise.query.filter_by(
+                    is_active=True,
+                    created_by=g.user.teacher_id,
+                )
+                .order_by(Exercise.created_at.desc())
+                .all()
+            )
+        else:
+            items = []
+    else:
+        # Côté enseignant : afficher uniquement ses propres exercices
+        items = (
+            Exercise.query.filter_by(created_by=g.user.id)
+            .order_by(Exercise.created_at.desc())
+            .all()
+        )
+
     done = {}
     if g.user.role == "student":
         for s in Submission.query.filter_by(student_id=g.user.id).all():
             done[s.exercise_id] = max(done.get(s.exercise_id, 0), s.score_global or 0)
-    return render_template("exercises.html", items=items, done=done, situations=SITUATIONS)
 
+    return render_template("exercises.html", items=items, done=done, situations=SITUATIONS)
 
 @app.route("/exercises/<int:ex_id>")
 @login_required()
 def exercise_detail(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
-    if g.user.role == "student" and not ex.is_active:
+    if g.user.role == "student" and (not ex.is_active or ex.created_by != g.user.teacher_id):
+        abort(404)
+    if g.user.role == "teacher" and ex.created_by != g.user.id:
         abort(404)
     return render_template("exercise_detail.html", ex=ex, situations=SITUATIONS)
-
 
 @app.post("/exercises/<int:ex_id>/submit")
 @login_required("student")
@@ -369,7 +459,7 @@ def seed_command():
     """Remplit la base avec des donnees de demonstration."""
     from seed import run
     run()
-    print("Base de demonstration creee.")
+    print("Base de demonstration creee. - app.py:462")
 
 
 if __name__ == "__main__":
