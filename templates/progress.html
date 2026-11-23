@@ -48,20 +48,82 @@
 </section>
 {% endif %}
 
+
 <section class="bg-white rounded-2xl p-6 shadow-sm mt-6">
   <h2 class="text-xl font-extrabold">Journal détaillé des sessions enregistrées</h2>
-  <div class="overflow-x-auto mt-3"><table class="w-full text-sm">
-    <thead class="text-[11px] text-slate-400 uppercase text-left"><tr><th class="py-2">Session</th><th>Exercice</th><th>Date</th><th>Durée & WPM</th><th>Score</th><th>Rapport</th></tr></thead>
-    <tbody class="divide-y divide-slate-100">
-    {% for s in subs|reverse %}
-      <tr><td class="py-3 font-mono text-brand">#{{ subs|length - loop.index0 }}</td>
-        <td><b>{{ s.exercise.title }}</b></td><td class="font-mono text-xs">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
-        <td class="font-mono text-xs">{{ s.duration }}s<br>{{ s.wpm }} WPM</td>
-        <td>{{ score_pill(s.score_global) }} <span class="text-[11px] font-mono">{{ level_from_score(s.score_global) }}</span></td>
-        <td><a href="{{ url_for('feedback', sub_id=s.id) }}" class="text-xs bg-lav rounded-lg px-3 py-1.5 font-semibold">Rapport IA</a></td></tr>
-    {% else %}<tr><td colspan="6" class="py-6 text-center text-slate-400">Aucune session pour le moment.</td></tr>{% endfor %}
-    </tbody></table></div>
+
+  <div class="overflow-x-auto mt-3">
+    <table class="w-full text-sm">
+      <thead class="text-[11px] text-slate-400 uppercase text-left">
+        <tr>
+          <th class="py-2">Session</th>
+          <th>Exercice</th>
+          <th>Date</th>
+          <th>Durée & WPM</th>
+          <th>Score</th>
+          <th>Rapport</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-slate-100">
+        {% for s in subs|reverse %}
+        <tr>
+          <td class="py-3 font-mono text-brand">#{{ subs|length - loop.index0 }}</td>
+          <td><b>{{ s.exercise.title }}</b></td>
+          <td class="font-mono text-xs">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
+          <td class="font-mono text-xs">{{ s.duration }}s<br>{{ s.wpm }} WPM</td>
+          <td>
+            {{ score_pill(s.score_global) }}
+            <span class="text-[11px] font-mono">{{ level_from_score(s.score_global) }}</span>
+          </td>
+          <td>
+            <a href="{{ url_for('feedback', sub_id=s.id) }}"
+               class="text-xs bg-lav rounded-lg px-3 py-1.5 font-semibold">
+              Rapport IA
+            </a>
+          </td>
+
+          <td>
+            {% if user.role == 'student' %}
+            <details class="relative">
+              <summary class="cursor-pointer list-none text-xl font-bold px-3 py-1">⋮</summary>
+              <div class="absolute right-0 z-20 bg-white shadow-lg border rounded-xl p-2 min-w-36">
+
+                {% if s.audio_filename %}
+                <a href="{{ url_for('audio', filename=s.audio_filename) }}"
+                   download
+                   class="block text-sm px-3 py-2 hover:bg-lav rounded-lg">
+                  Download audio
+                </a>
+                {% endif %}
+
+                <form method="POST"
+                      action="{{ url_for('delete_submission', sub_id=s.id) }}"
+                      onsubmit="return confirm('Confirmer la suppression de cette tentative ? Si elle est évaluée, la note et le commentaire seront également perdus.')">
+                  <button type="submit"
+                          class="w-full text-left text-sm text-red-600 px-3 py-2 hover:bg-red-50 rounded-lg">
+                    Delete attempt
+                  </button>
+                </form>
+
+              </div>
+            </details>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="py-6 text-center text-slate-400">
+            Aucune session pour le moment.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
+
 {% endblock %}
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>

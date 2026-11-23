@@ -363,6 +363,38 @@ def progress():
                            chart=chart)
 
 
+
+
+@app.post("/submissions/<int:sub_id>/delete")
+@login_required("student")
+def delete_submission(sub_id):
+    submission = db.get_or_404(Submission, sub_id)
+
+    # Vérifier que la tentative appartient à l'étudiant connecté
+    if submission.student_id != g.user.id:
+        abort(403)
+
+    audio_filename = submission.audio_filename
+
+    # Supprimer la tentative et ses erreurs grammaticales
+    db.session.delete(submission)
+    db.session.commit()
+
+    # Supprimer également le fichier audio s'il existe
+    if audio_filename:
+        audio_path = os.path.join(
+            app.config["UPLOAD_FOLDER"],
+            os.path.basename(audio_filename)
+        )
+
+        try:
+            if os.path.isfile(audio_path):
+                os.remove(audio_path)
+        except OSError as e:
+            print("Erreur suppression audio :", e)
+
+    return redirect(url_for("progress"))
+
 # ---------------------------------------------------------------- commandes
 @app.cli.command("seed")
 def seed_command():
