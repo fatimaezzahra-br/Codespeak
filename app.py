@@ -1,12 +1,15 @@
+import csv
+import io
 import os
 import re
 import time
-from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
-                   request, send_from_directory, session, url_for)
+from flask import (Flask, Response, abort, flash, g, jsonify, redirect,
+                   render_template, request, send_file, send_from_directory,
+                   session, url_for)
+from fpdf import FPDF
 from markupsafe import Markup, escape
 from sqlalchemy import func, or_
 
@@ -89,7 +92,25 @@ def login_required(role=None):
             return f(*args, **kwargs)
         return wrapper
     return deco
-#nouveau user
+
+
+@app.before_request
+def load_user():
+    uid = session.get("user_id")
+    g.user = db.session.get(User, uid) if uid else None
+
+
+@app.context_processor
+def inject_globals():
+    return dict(user=g.user, level_from_score=level_from_score)
+
+
+# ---------------------------------------------------------------- authentification
+@app.route("/")
+def home():
+    if not g.user:
+        return redirect(url_for("login"))
+    return redirect(url_for("teacher_dashboard" if g.user.role == "teacher" else "exercises"))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -133,23 +154,6 @@ def register():
         return redirect(url_for("login"))
 
     return render_template("register.html", teachers=teachers)
-@app.before_request
-def load_user():
-    uid = session.get("user_id")
-    g.user = db.session.get(User, uid) if uid else None
-
-
-@app.context_processor
-def inject_globals():
-    return dict(user=g.user, level_from_score=level_from_score)
-
-
-# ---------------------------------------------------------------- authentification
-@app.route("/")
-def home():
-    if not g.user:
-        return redirect(url_for("login"))
-    return redirect(url_for("teacher_dashboard" if g.user.role == "teacher" else "exercises"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -175,7 +179,66 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+@app.route("/settings", methods=["GET", "POST"])
+@login_required()
+def settings():
+    teachers = []
+    if g.user.role == "student":
+        teachers = User.query.filter_by(role="teacher").order_by(User.full_name.asc()).all()
 
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1. Mise à jour du profil et du professeur référent
+        if action == "profile":
+            full_name = request.form.get("full_name", "").strip()
+            if not full_name:
+                flash("Le nom complet ne peut pas être vide.", "error")
+                return redirect(url_for("settings"))
+
+            g.user.full_name = full_name
+
+            if g.user.role == "student":
+                raw_tid = request.form.get("teacher_id", "").strip()
+                if raw_tid.isdigit():
+                    teacher = User.query.filter_by(id=int(raw_tid), role="teacher").first()
+                    if teacher:
+                        g.user.teacher_id = teacher.id
+                    else:
+                        flash("Le professeur sélectionné est introuvable.", "error")
+                        return redirect(url_for("settings"))
+                else:
+                    flash("Veuillez sélectionner un professeur référent valide.", "error")
+                    return redirect(url_for("settings"))
+
+            db.session.commit()
+            flash("Votre profil et votre professeur référent ont été mis à jour.", "ok")
+            return redirect(url_for("settings", updated="profile"))
+
+        # 2. Changement de mot de passe
+        elif action == "password":
+            current_pwd = request.form.get("current_password", "")
+            new_pwd = request.form.get("new_password", "")
+            confirm_pwd = request.form.get("confirm_password", "")
+
+            if not g.user.check_password(current_pwd):
+                flash("Le mot de passe actuel est incorrect.", "error")
+                return redirect(url_for("settings", err="current_pwd"))
+
+            if len(new_pwd) < 6:
+                flash("Le nouveau mot de passe doit contenir au moins 6 caractères.", "error")
+                return redirect(url_for("settings", err="short_pwd"))
+
+            if new_pwd != confirm_pwd:
+                flash("La confirmation du nouveau mot de passe ne correspond pas.", "error")
+                return redirect(url_for("settings", err="mismatch_pwd"))
+
+            g.user.set_password(new_pwd)
+            db.session.commit()
+            flash("Votre mise à jour de mot de passe a été effectuée avec succès.", "ok")
+            return redirect(url_for("settings", updated="password"))
+
+    return render_template("settings.html", teachers=teachers)
 # ---------------------------------------------------------------- enseignant
 @app.route("/teacher/dashboard")
 @login_required("teacher")
@@ -185,13 +248,11 @@ def teacher_dashboard():
     now = datetime.utcnow()
     teacher_id = g.user.id
 
-    # 1. Statistiques filtrées uniquement pour l'enseignant connecté
     n_students = User.query.filter_by(role="student", teacher_id=teacher_id).count()
     teacher_exercises = Exercise.query.filter_by(created_by=teacher_id)
     n_active = teacher_exercises.filter_by(is_active=True).count()
     n_week = teacher_exercises.filter(Exercise.created_at >= now - timedelta(days=7)).count()
 
-    # 2. Requête de base pour les soumissions liées aux exercices de cet enseignant
     base = (
         Submission.query.join(User, Submission.student_id == User.id)
         .join(Exercise, Submission.exercise_id == Exercise.id)
@@ -222,7 +283,6 @@ def teacher_dashboard():
         n_students=n_students,
     )
 
-    # 3. Compteurs et filtres du tableau des soumissions
     counts = {
         "all": base.count(),
         "a_evaluer": base.filter(Submission.status == "a_evaluer").count(),
@@ -250,6 +310,8 @@ def teacher_dashboard():
         situations=SITUATIONS,
         levels=LEVELS,
     )
+
+
 @app.post("/teacher/exercises")
 @login_required("teacher")
 def create_exercise():
@@ -279,6 +341,8 @@ def create_exercise():
 @login_required("teacher")
 def toggle_exercise(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
+    if ex.created_by != g.user.id:
+        abort(403)
     ex.is_active = not ex.is_active
     db.session.commit()
     return redirect(request.referrer or url_for("exercises"))
@@ -288,6 +352,8 @@ def toggle_exercise(ex_id):
 @login_required("teacher")
 def review(sub_id):
     s = db.get_or_404(Submission, sub_id)
+    if s.exercise.created_by != g.user.id:
+        abort(403)
     s.teacher_comment = request.form.get("comment", "").strip()
     final = request.form.get("final_score", type=float)
     if final is not None and 0 <= final <= 10:
@@ -296,6 +362,143 @@ def review(sub_id):
     db.session.commit()
     flash("Évaluation enregistrée.", "ok")
     return redirect(url_for("feedback", sub_id=s.id))
+
+
+@app.route("/teacher/export/csv")
+@login_required("teacher")
+def export_grades_csv():
+    teacher_id = g.user.id
+
+    rows = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .order_by(User.full_name.asc(), Submission.created_at.desc())
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+
+    writer.writerow([
+        "Étudiant",
+        "Email",
+        "Exercice",
+        "Score Global (/10)",
+        "Fluidité (Fluency)",
+        "Précision Technique",
+        "Grammaire",
+        "Prononciation",
+        "Débit (WPM)",
+        "Statut",
+        "Date",
+    ])
+
+    for s in rows:
+        writer.writerow([
+            s.student.full_name,
+            s.student.email,
+            s.exercise.title,
+            s.score_global if s.score_global is not None else "",
+            s.fluency if s.fluency is not None else "",
+            s.technical_precision if s.technical_precision is not None else "",
+            s.grammar if s.grammar is not None else "",
+            s.pronunciation if s.pronunciation is not None else "",
+            s.wpm or 0,
+            "Évalué" if s.status == "evalue" else "À évaluer",
+            s.created_at.strftime("%d/%m/%Y %H:%M"),
+        ])
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    filename = f"releve_notes_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+
+    return Response(
+        csv_bytes,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.route("/teacher/export/pdf")
+@login_required("teacher")
+def export_grades_pdf():
+    teacher_id = g.user.id
+
+    rows = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .order_by(User.full_name.asc(), Submission.created_at.desc())
+        .all()
+    )
+
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "ENSIASD - CodeSpeak | Relevé des Évaluations Orales", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(
+        0,
+        7,
+        f"Enseignant : {g.user.full_name}   |   Date d'export : {datetime.utcnow().strftime('%d/%m/%Y')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.ln(5)
+
+    headers = [
+        ("Étudiant", 55),
+        ("Exercice", 75),
+        ("Global", 24),
+        ("Fluency", 24),
+        ("Tech.", 24),
+        ("Grammar", 24),
+        ("Pronunc.", 24),
+        ("Statut", 27),
+    ]
+
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 9)
+    for title, width in headers:
+        pdf.cell(width, 9, title, border=1, align="C", fill=True)
+    pdf.ln()
+
+    pdf.set_text_color(15, 23, 42)
+    pdf.set_font("Helvetica", "", 9)
+    for s in rows:
+        student_name = s.student.full_name[:28].encode("latin-1", "replace").decode("latin-1")
+        ex_title = s.exercise.title[:38].encode("latin-1", "replace").decode("latin-1")
+        statut = "Evalue" if s.status == "evalue" else "A evaluer"
+
+        values = [
+            (student_name, 55, "L"),
+            (ex_title, 75, "L"),
+            (str(s.score_global or "-"), 24, "C"),
+            (str(s.fluency or "-"), 24, "C"),
+            (str(s.technical_precision or "-"), 24, "C"),
+            (str(s.grammar or "-"), 24, "C"),
+            (str(s.pronunciation or "-"), 24, "C"),
+            (statut, 27, "C"),
+        ]
+        for val, width, align in values:
+            pdf.cell(width, 8, val, border=1, align=align)
+        pdf.ln()
+
+    pdf_buffer = io.BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+
+    filename = f"releve_notes_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 # ---------------------------------------------------------------- exercices
@@ -315,7 +518,6 @@ def exercises():
         else:
             items = []
     else:
-        # Côté enseignant : afficher uniquement ses propres exercices
         items = (
             Exercise.query.filter_by(created_by=g.user.id)
             .order_by(Exercise.created_at.desc())
@@ -329,6 +531,7 @@ def exercises():
 
     return render_template("exercises.html", items=items, done=done, situations=SITUATIONS)
 
+
 @app.route("/exercises/<int:ex_id>")
 @login_required()
 def exercise_detail(ex_id):
@@ -339,10 +542,13 @@ def exercise_detail(ex_id):
         abort(404)
     return render_template("exercise_detail.html", ex=ex, situations=SITUATIONS)
 
+
 @app.post("/exercises/<int:ex_id>/submit")
 @login_required("student")
 def submit(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
+    if not ex.is_active or ex.created_by != g.user.teacher_id:
+        abort(404)
     duration = int(float(request.form.get("duration", 0) or 0))
     transcript = (request.form.get("transcript") or "").strip()
     filename = None
@@ -383,6 +589,8 @@ def feedback_latest():
     q = Submission.query
     if g.user.role == "student":
         q = q.filter_by(student_id=g.user.id)
+    else:
+        q = q.join(Exercise, Submission.exercise_id == Exercise.id).filter(Exercise.created_by == g.user.id)
     s = q.order_by(Submission.created_at.desc()).first()
     if not s:
         return render_template("empty.html", message="Aucun enregistrement pour le moment.")
@@ -395,6 +603,8 @@ def feedback(sub_id):
     s = db.get_or_404(Submission, sub_id)
     if g.user.role == "student" and s.student_id != g.user.id:
         abort(403)
+    if g.user.role == "teacher" and s.exercise.created_by != g.user.id:
+        abort(403)
     paragraphs = [highlight(p, s.issues, s.found_list)
                   for p in (s.transcript or "").split("\n\n") if p.strip()]
     return render_template("feedback.html", s=s, paragraphs=paragraphs)
@@ -406,6 +616,8 @@ def audio(filename):
     s = Submission.query.filter_by(audio_filename=filename).first_or_404()
     if g.user.role == "student" and s.student_id != g.user.id:
         abort(403)
+    if g.user.role == "teacher" and s.exercise.created_by != g.user.id:
+        abort(403)
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
@@ -415,13 +627,15 @@ def audio(filename):
 def progress():
     students = []
     if g.user.role == "teacher":
-        students = User.query.filter_by(role="student").order_by(User.full_name).all()
+        students = User.query.filter_by(role="student", teacher_id=g.user.id).order_by(User.full_name).all()
         sid = request.args.get("student_id", type=int)
         if not sid:
             with_subs = [st for st in students if Submission.query.filter_by(student_id=st.id).first()]
             sid = (with_subs or students or [None])[0]
             sid = sid.id if sid else None
         student = db.session.get(User, sid) if sid else None
+        if student and student.teacher_id != g.user.id:
+            abort(403)
     else:
         student = g.user
     if not student:
@@ -459,7 +673,7 @@ def seed_command():
     """Remplit la base avec des donnees de demonstration."""
     from seed import run
     run()
-    print("Base de demonstration creee. - app.py:462")
+    print("Base de demonstration creee. - app.py:676")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Paramètres du compte{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Messages de confirmation / erreur visibles immédiatement -->
+  {% set updated = request.args.get('updated') %}
+  {% set err = request.args.get('err') %}
+
+  {% if updated == 'password' %}
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl px-5 py-4 text-sm font-semibold flex items-center justify-between shadow-sm">
+      <span>✓ Votre mise à jour de mot de passe a été effectuée avec succès.</span>
+    </div>
+  {% elif updated == 'profile' %}
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl px-5 py-4 text-sm font-semibold flex items-center justify-between shadow-sm">
+      <span>✓ Vos informations de profil et votre professeur référent ont été enregistrés.</span>
+    </div>
+  {% endif %}
+
+  {% if err == 'current_pwd' %}
+    <div class="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl px-5 py-4 text-sm font-semibold shadow-sm">
+      ✕ Le mot de passe actuel saisi est incorrect.
+    </div>
+  {% elif err == 'short_pwd' %}
+    <div class="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl px-5 py-4 text-sm font-semibold shadow-sm">
+      ✕ Le nouveau mot de passe doit contenir au moins 6 caractères.
+    </div>
+  {% elif err == 'mismatch_pwd' %}
+    <div class="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl px-5 py-4 text-sm font-semibold shadow-sm">
+      ✕ Les deux nouveaux mots de passe ne correspondent pas.
+    </div>
+  {% endif %}
+
+  <!-- En-tête -->
+  <section class="bg-gradient-to-br from-white to-lav/60 rounded-3xl p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-brand text-white grid place-items-center text-lg font-extrabold">
+        {{ user.initials }}
+      </div>
+      <div>
+        <span class="text-[11px] font-mono font-bold text-brand uppercase">
+          {{ 'ESPACE ENSEIGNANT' if user.role == 'teacher' else 'ÉLÈVE INGÉNIEUR' }}
+        </span>
+        <h1 class="text-2xl font-extrabold text-slate-900">{{ user.full_name }}</h1>
+        <p class="text-xs font-mono text-slate-500">{{ user.email }}</p>
+      </div>
+    </div>
+
+    {% if user.student_code %}
+      <span class="bg-white rounded-full px-4 py-2 text-xs font-mono font-semibold shadow-sm">
+        Code : {{ user.student_code }}
+      </span>
+    {% endif %}
+  </section>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <!-- Carte 1 : Informations personnelles & Professeur référent -->
+    <form method="post" action="{{ url_for('settings') }}" class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+      <input type="hidden" name="action" value="profile">
+      <div>
+        <p class="text-[11px] font-mono font-bold text-brand">IDENTITÉ ACADÉMIQUE</p>
+        <h2 class="text-xl font-extrabold">Informations du profil</h2>
+      </div>
+
+      <label class="block text-sm font-semibold">Nom complet
+        <input name="full_name" type="text" required value="{{ user.full_name }}"
+               class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:ring-1 focus:ring-brand">
+      </label>
+
+      <label class="block text-sm font-semibold text-slate-400">Email institutionnel (non modifiable)
+        <input type="email" disabled value="{{ user.email }}"
+               class="mt-1 w-full bg-slate-100 text-slate-500 rounded-lg px-3 py-2.5 font-normal cursor-not-allowed">
+      </label>
+
+      {% if user.role == "student" %}
+        <label class="block text-sm font-semibold">Professeur référent
+          <select name="teacher_id" required
+                  class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:ring-1 focus:ring-brand">
+            <option value="">-- Choisir votre professeur --</option>
+            {% for t in teachers %}
+              <option value="{{ t.id }}" {% if user.teacher_id == t.id %}selected{% endif %}>
+                {{ t.full_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
+
+      <div class="pt-2">
+        <button type="submit" class="w-full bg-brand text-white font-semibold text-sm rounded-lg py-2.5 hover:opacity-90 transition">
+          Enregistrer les modifications
+        </button>
+      </div>
+    </form>
+
+    <!-- Carte 2 : Sécurité & Mot de passe -->
+    <form method="post" action="{{ url_for('settings') }}" class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+      <input type="hidden" name="action" value="password">
+      <div>
+        <p class="text-[11px] font-mono font-bold text-brand">SÉCURITÉ</p>
+        <h2 class="text-xl font-extrabold">Changer le mot de passe</h2>
+      </div>
+
+      <label class="block text-sm font-semibold">Mot de passe actuel
+        <input name="current_password" type="password" required
+               class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:ring-1 focus:ring-brand"
+               placeholder="••••••••">
+      </label>
+
+      <label class="block text-sm font-semibold">Nouveau mot de passe
+        <input name="new_password" type="password" required minlength="6"
+               class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:ring-1 focus:ring-brand"
+               placeholder="Minimum 6 caractères">
+      </label>
+
+      <label class="block text-sm font-semibold">Confirmer le nouveau mot de passe
+        <input name="confirm_password" type="password" required minlength="6"
+               class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:ring-1 focus:ring-brand"
+               placeholder="••••••••">
+      </label>
+
+      <div class="pt-2">
+        <button type="submit" class="w-full bg-slate-900 text-white font-semibold text-sm rounded-lg py-2.5 hover:opacity-90 transition">
+          Mettre à jour le mot de passe
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
