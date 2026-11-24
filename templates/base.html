@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -24,10 +24,10 @@
       <span class="hidden sm:inline text-[11px] font-mono bg-lav rounded-full px-3 py-1">ENSIASD · MGSI-1</span>
     </div>
     {% set tabs = [] %}
-    {% if user.role == 'teacher' %}{% set _ = tabs.append((['teacher_dashboard'], url_for('teacher_dashboard'), 'Dashboard Enseignant')) %}{% endif %}
-    {% set _ = tabs.append((['exercises','exercise_detail'], url_for('exercises'), 'Exercice Oral')) %}
-    {% set _ = tabs.append((['feedback','feedback_latest'], url_for('feedback_latest'), 'Évaluation & Feedback')) %}
-    {% set _ = tabs.append((['progress'], url_for('progress'), 'Progression & Analytics')) %}
+    {% if user.role == 'teacher' %}{% set _ = tabs.append((['teacher_dashboard'], url_for('teacher_dashboard'), 'Teacher Dashboard')) %}{% endif %}
+    {% set _ = tabs.append((['exercises','exercise_detail'], url_for('exercises'), 'Oral Exercises')) %}
+    {% set _ = tabs.append((['feedback','feedback_latest'], url_for('feedback_latest'), 'Evaluation & Feedback')) %}
+    {% set _ = tabs.append((['progress'], url_for('progress'), 'Progress & Analytics')) %}
     <nav class="flex gap-1 text-sm font-semibold">
       {% for eps, href, label in tabs %}
       <a href="{{ href }}" class="px-3 py-2 rounded-lg {{ 'bg-lav text-brand' if ep in eps else 'text-slate-600 hover:bg-slate-100' }}">{{ label }}</a>
@@ -36,9 +36,9 @@
     <div class="flex items-center gap-3 text-sm">
       <div class="text-right leading-tight">
         <div class="font-semibold">{{ user.full_name }}</div>
-        <div class="font-mono text-[11px] text-brand">{{ 'Mode Enseignant' if user.role == 'teacher' else 'Mode Étudiant' }}</div>
+        <div class="font-mono text-[11px] text-brand">{{ 'Teacher Mode' if user.role == 'teacher' else 'Student Mode' }}</div>
       </div>
-      <a href="{{ url_for('logout') }}" class="text-xs bg-lav rounded-full px-3 py-1.5 font-semibold hover:bg-slate-200">Déconnexion</a>
+      <a href="{{ url_for('logout') }}" class="text-xs bg-lav rounded-full px-3 py-1.5 font-semibold hover:bg-slate-200">Log out</a>
     </div>
   </div>
 </header>

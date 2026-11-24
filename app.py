@@ -198,7 +198,7 @@ def create_exercise():
     db.session.flush()
     ex.code = f"MGSI-ENG-{ex.id:03d}"
     db.session.commit()
-    flash(f"Exercice « {title} » publié pour toute la classe.", "ok")
+    flash(f"Exercise « {title} » published for the entire class.", "ok")
     return redirect(url_for("teacher_dashboard"))
 
 
@@ -221,7 +221,7 @@ def review(sub_id):
         s.score_global = round(final, 1)
     s.status = "evalue"
     db.session.commit()
-    flash("Évaluation enregistrée.", "ok")
+    flash("Evaluation saved.", "ok")
     return redirect(url_for("feedback", sub_id=s.id))
 
 
@@ -295,7 +295,7 @@ def feedback_latest():
         q = q.filter_by(student_id=g.user.id)
     s = q.order_by(Submission.created_at.desc()).first()
     if not s:
-        return render_template("empty.html", message="Aucun enregistrement pour le moment.")
+        return render_template("empty.html", message="No recordings available yet.")
     return redirect(url_for("feedback", sub_id=s.id))
 
 
@@ -335,7 +335,7 @@ def progress():
     else:
         student = g.user
     if not student:
-        return render_template("empty.html", message="Aucun étudiant.")
+        return render_template("empty.html", message="No students found.")
 
     subs = (Submission.query.filter_by(student_id=student.id)
             .order_by(Submission.created_at.asc()).all())
