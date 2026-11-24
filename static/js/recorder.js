@@ -11,7 +11,7 @@
   const url = root.dataset.submitUrl;
   const maxSeconds = parseInt(root.dataset.max, 10) || 90;
 
-  let recorder, chunks = [], startTime, tick, recognition, finalText = "", recording = false;
+  let recorder, chunks = [], startTime, tick, finalText = "", recording = false;
 
   const fmt = (s) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
   const setStatus = (t) => (statusEl.textContent = t);
@@ -49,24 +49,12 @@
       stream.getTracks().forEach((t) => t.stop());
       const duration = Math.round((Date.now() - startTime) / 1000);
       const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-      // petit delai pour laisser la reconnaissance vocale finir
+      // petit delai avant l'envoi de l'audio au serveur
       setTimeout(() => send(blob, duration, finalText.trim()), 700);
     };
 
-    // Transcription gratuite par le navigateur (Chrome / Edge)
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SR) {
-      recognition = new SR();
-      recognition.lang = "en-US";
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.onresult = (e) => {
-        for (let i = e.resultIndex; i < e.results.length; i++)
-          if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
-      };
-      recognition.onend = () => { if (recording) try { recognition.start(); } catch (_) {} };
-      recognition.start();
-    }
+    // Transcription navigateur désactivée dans l'application Desktop.
+// La transcription sera effectuée côté serveur.
 
     recorder.start();
     startTime = Date.now();
@@ -85,7 +73,6 @@
     if (!recording) return;
     recording = false;
     clearInterval(tick);
-    if (recognition) try { recognition.stop(); } catch (_) {}
     recorder.stop();
     setStatus("Traitement de l'enregistrement...");
   }
