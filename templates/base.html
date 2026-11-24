@@ -12,6 +12,58 @@
       fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] } } } }
   </script>
   <style>body { background: #f8f8ff; }</style>
+  <!-- 1. Script anti-flash : applique le thème avant l'affichage de la page -->
+<script>
+  if (localStorage.getItem('codespeak_theme') === 'dark') {
+    document.documentElement.classList.add('dark');
+  }
+</script>
+
+<!-- 2. Adaptation automatique de la palette CodeSpeak en mode sombre -->
+<style>
+  html.dark body {
+    background-color: #0f172a !important; /* slate-900 */
+    color: #f1f5f9 !important;            /* slate-100 */
+  }
+  html.dark .bg-white {
+    background-color: #1e293b !important; /* slate-800 */
+    color: #f1f5f9 !important;
+  }
+  html.dark .bg-lav\/40,
+  html.dark .bg-lav\/50,
+  html.dark .bg-lav\/60,
+  html.dark .bg-lav\/70,
+  html.dark .bg-lav {
+    background-color: #334155 !important; /* slate-700 */
+    color: #e2e8f0 !important;
+  }
+  html.dark .from-white {
+    --tw-gradient-from: #1e293b !important;
+  }
+  html.dark .to-lav\/60 {
+    --tw-gradient-to: #0f172a !important;
+  }
+  html.dark .text-slate-900,
+  html.dark .text-slate-700 {
+    color: #f8fafc !important;
+  }
+  html.dark .text-slate-500,
+  html.dark .text-slate-600 {
+    color: #94a3b8 !important;
+  }
+  html.dark .border-slate-100,
+  html.dark .border-slate-200,
+  html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #334155 !important;
+  }
+  html.dark input:not([type="radio"]):not([type="range"]),
+  html.dark select,
+  html.dark textarea {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+  }
+</style>
 </head>
 <body class="font-sans text-ink">
 {% block nav %}

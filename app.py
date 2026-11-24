@@ -185,6 +185,21 @@ def settings():
     teachers = []
     if g.user.role == "student":
         teachers = User.query.filter_by(role="teacher").order_by(User.full_name.asc()).all()
+        user_subs = Submission.query.filter_by(student_id=g.user.id).all()
+        scored = [s.score_global for s in user_subs if s.score_global is not None]
+        account_summary = {
+            "count_label": "Tentatives enregistrées",
+            "count_value": len(user_subs),
+            "avg_value": round(sum(scored) / len(scored), 1) if scored else "-",
+        }
+    else:
+        n_students = User.query.filter_by(role="student", teacher_id=g.user.id).count()
+        n_ex = Exercise.query.filter_by(created_by=g.user.id).count()
+        account_summary = {
+            "count_label": "Élèves supervisés",
+            "count_value": n_students,
+            "avg_value": f"{n_ex} exercices",
+        }
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -205,14 +220,11 @@ def settings():
                     if teacher:
                         g.user.teacher_id = teacher.id
                     else:
-                        flash("Le professeur sélectionné est introuvable.", "error")
-                        return redirect(url_for("settings"))
+                        return redirect(url_for("settings", err="teacher_invalid"))
                 else:
-                    flash("Veuillez sélectionner un professeur référent valide.", "error")
-                    return redirect(url_for("settings"))
+                    return redirect(url_for("settings", err="teacher_invalid"))
 
             db.session.commit()
-            flash("Votre profil et votre professeur référent ont été mis à jour.", "ok")
             return redirect(url_for("settings", updated="profile"))
 
         # 2. Changement de mot de passe
@@ -222,23 +234,75 @@ def settings():
             confirm_pwd = request.form.get("confirm_password", "")
 
             if not g.user.check_password(current_pwd):
-                flash("Le mot de passe actuel est incorrect.", "error")
                 return redirect(url_for("settings", err="current_pwd"))
-
             if len(new_pwd) < 6:
-                flash("Le nouveau mot de passe doit contenir au moins 6 caractères.", "error")
                 return redirect(url_for("settings", err="short_pwd"))
-
             if new_pwd != confirm_pwd:
-                flash("La confirmation du nouveau mot de passe ne correspond pas.", "error")
                 return redirect(url_for("settings", err="mismatch_pwd"))
 
             g.user.set_password(new_pwd)
             db.session.commit()
-            flash("Votre mise à jour de mot de passe a été effectuée avec succès.", "ok")
             return redirect(url_for("settings", updated="password"))
 
-    return render_template("settings.html", teachers=teachers)
+        # 3. Export CSV personnel (relevé étudiant ou liste d'élèves enseignant)
+        elif action == "export_personal":
+            output = io.StringIO()
+            writer = csv.writer(output, delimiter=";")
+
+            if g.user.role == "student":
+                writer.writerow(["Exercice", "Score Global (/10)", "Fluidité", "Grammaire", "Prononciation", "WPM", "Statut", "Date"])
+                subs = Submission.query.filter_by(student_id=g.user.id).order_by(Submission.created_at.desc()).all()
+                for s in subs:
+                    writer.writerow([
+                        s.exercise.title,
+                        s.score_global or "",
+                        s.fluency or "",
+                        s.grammar or "",
+                        s.pronunciation or "",
+                        s.wpm or 0,
+                        "Évalué" if s.status == "evalue" else "En attente",
+                        s.created_at.strftime("%d/%m/%Y %H:%M"),
+                    ])
+                fname = f"mon_releve_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+            else:
+                writer.writerow(["Nom complet", "Email", "Nombre de rendus", "Moyenne (/10)"])
+                students = User.query.filter_by(role="student", teacher_id=g.user.id).order_by(User.full_name.asc()).all()
+                for st in students:
+                    st_subs = Submission.query.filter_by(student_id=st.id).all()
+                    sc = [x.score_global for x in st_subs if x.score_global is not None]
+                    avg_st = round(sum(sc) / len(sc), 1) if sc else ""
+                    writer.writerow([st.full_name, st.email, len(st_subs), avg_st])
+                fname = f"mes_etudiants_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+
+            return Response(
+                output.getvalue().encode("utf-8-sig"),
+                mimetype="text/csv; charset=utf-8",
+                headers={"Content-Disposition": f"attachment; filename={fname}"},
+            )
+
+        # 4. Suppression définitive du compte
+        elif action == "delete_account":
+            confirm_del_pwd = request.form.get("delete_password", "")
+            if not g.user.check_password(confirm_del_pwd):
+                return redirect(url_for("settings", err="delete_pwd"))
+
+            user_to_delete = g.user
+            if user_to_delete.role == "student":
+                Submission.query.filter_by(student_id=user_to_delete.id).delete()
+            else:
+                # Détacher les étudiants liés avant suppression du compte enseignant
+                User.query.filter_by(teacher_id=user_to_delete.id).update({"teacher_id": None})
+                for ex in Exercise.query.filter_by(created_by=user_to_delete.id).all():
+                    Submission.query.filter_by(exercise_id=ex.id).delete()
+                    db.session.delete(ex)
+
+            db.session.delete(user_to_delete)
+            db.session.commit()
+            session.clear()
+            flash("Votre compte a été supprimé définitivement.", "ok")
+            return redirect(url_for("login"))
+
+    return render_template("settings.html", teachers=teachers, summary=account_summary)
 # ---------------------------------------------------------------- enseignant
 @app.route("/teacher/dashboard")
 @login_required("teacher")
@@ -673,7 +737,7 @@ def seed_command():
     """Remplit la base avec des donnees de demonstration."""
     from seed import run
     run()
-    print("Base de demonstration creee. - app.py:676")
+    print("Base de demonstration creee. - app.py:740")
 
 
 if __name__ == "__main__":
