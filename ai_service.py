@@ -36,14 +36,14 @@ def transcribe(path):
         except Exception as e:
             print("Erreur OpenAI, utilisation du modèle local :", e)
 
-    # 2. Transcription locale avec faster-whisper
+    # 2. Transcription locale avec faster-whisper (sans vad_filter agressif)
     try:
         from faster_whisper import WhisperModel
 
         if _whisper_model is None:
-            print("Chargement du modèle Whisper local...")
+            print("Chargement du modèle Whisper local (tiny/base)...")
             _whisper_model = WhisperModel(
-                "base",
+                "tiny",  # Plus rapide et léger (75 Mo) que "base"
                 device="cpu",
                 compute_type="int8"
             )
@@ -51,17 +51,18 @@ def transcribe(path):
         segments, info = _whisper_model.transcribe(
             path,
             language="en",
-            vad_filter=True
+            vad_filter=False  # Désactivé pour ne pas couper les micros à faible volume
         )
 
         transcript = " ".join(segment.text.strip() for segment in segments)
+        print("Whisper local a transcrit :", repr(transcript))
         return transcript.strip()
 
     except Exception as e:
-        print("Erreur transcription locale :", e)
+        import traceback
+        print("ERREUR TRANSCRIPTION LOCALE :")
+        traceback.print_exc()
         return ""
-
-
 
 # ---------- 2. Statistiques simples (toujours calculees localement) ----------
 
@@ -205,7 +206,7 @@ def analyze(transcript, exercise, duration):
         try:
             result = claude_analysis(transcript, exercise, stats)
         except Exception as e:
-            print("Erreur Claude, bascule sur les regles :", e)
+            print("Erreur Claude, bascule sur les regles : - ai_service.py:209", e)
     if result is None:
         result = rule_based_analysis(transcript, stats, keywords)
 

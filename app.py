@@ -621,11 +621,14 @@ def submit(ex_id):
         filename = f"{g.user.id}_{int(time.time())}.webm"
         path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         audio.save(path)
+        print("DEBUG AUDIO SAVED: - app.py:624", path, "TAILLE:", os.path.getsize(path), "octets")
         if not transcript:
             transcript = ai_service.transcribe(path)
-    if len(transcript.split()) < 5:
-        return jsonify(error="Transcription vide ou trop courte. Parle plus longtemps ou écris ton texte."), 400
 
+    print("DEBUG TRANSCRIPT REÇU: - app.py:628", repr(transcript))
+
+    if len(transcript.split()) < 5:
+        return jsonify(error=f"Transcription insuffisante ({len(transcript.split())} mots détectés). Vérifiez votre micro ou utilisez Chrome/Edge."), 400
     r = ai_service.analyze(transcript, ex, duration)
     sub = Submission(
         exercise_id=ex.id, student_id=g.user.id, audio_filename=filename,
@@ -644,8 +647,6 @@ def submit(ex_id):
     db.session.add(sub)
     db.session.commit()
     return jsonify(url=url_for("feedback", sub_id=sub.id))
-
-
 # ---------------------------------------------------------------- feedback
 @app.route("/feedback")
 @login_required()
@@ -759,7 +760,7 @@ def delete_submission(sub_id):
             if os.path.isfile(audio_path):
                 os.remove(audio_path)
         except OSError as e:
-            print("Erreur suppression audio :", e)
+            print("Erreur suppression audio : - app.py:763", e)
 
     return redirect(url_for("progress"))
 
@@ -769,7 +770,7 @@ def seed_command():
     """Remplit la base avec des donnees de demonstration."""
     from seed import run
     run()
-    print("Base de demonstration creee. - app.py:740")
+    print("Base de demonstration creee. - app.py:773")
 
 
 if __name__ == "__main__":
