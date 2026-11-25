@@ -95,6 +95,19 @@
 <!-- Student Submissions -->
 <section class="bg-white rounded-2xl p-6 shadow-sm mt-6">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-4">
+    <div><p class="text-[11px] font-mono font-bold text-brand">SOUMISSIONS DES ÉTUDIANTS (MGSI-1)</p>
+      <h2 class="text-2xl font-extrabold">Évaluations et enregistrements audio</h2></div>
+      <div class="flex flex-wrap items-center gap-2">
+      <!-- Boutons d'export des notes -->
+      <a href="{{ url_for('export_grades_csv') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">
+        Exporter Excel (CSV)
+      </a>
+      <a href="{{ url_for('export_grades_pdf') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition">
+        Exporter Bulletin (PDF)
+      </a>
+    
     <div><p class="text-[11px] font-mono font-bold text-brand">STUDENT SUBMISSIONS (MGSI-1)</p>
       <h2 class="text-2xl font-extrabold">Assessments & Audio Recordings</h2></div>
     <form method="get" class="flex gap-2 items-center text-sm">
@@ -103,6 +116,7 @@
       <div class="flex bg-lav/50 rounded-full p-1 text-xs font-semibold">
         {% for key, label in [('all','All'),('a_evaluer','To Review'),('evalue','Reviewed')] %}
         <a href="{{ url_for('teacher_dashboard', filter=key, q=search) }}" class="px-3 py-1.5 rounded-full {{ 'bg-white shadow' if flt == key }}">{{ label }} ({{ counts[key] }})</a>{% endfor %}
+      </div>
       </div>
     </form>
   </div>

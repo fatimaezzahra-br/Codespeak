@@ -1,11 +1,15 @@
+import csv
+import io
 import os
 import re
 import time
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
-                   request, send_from_directory, session, url_for)
+from flask import (Flask, Response, abort, flash, g, jsonify, redirect,
+                   render_template, request, send_file, send_from_directory,
+                   session, url_for)
+from fpdf import FPDF
 from markupsafe import Markup, escape
 from sqlalchemy import func, or_
 
@@ -109,6 +113,49 @@ def home():
     return redirect(url_for("teacher_dashboard" if g.user.role == "teacher" else "exercises"))
 
 
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    teachers = User.query.filter_by(role="teacher").order_by(User.full_name).all()
+
+    if request.method == "POST":
+        full_name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        role = request.form.get("profile", "student")
+        teacher_id = request.form.get("teacher_id", "").strip()
+
+        if role not in ("teacher", "student"):
+            role = "student"
+
+        if not email.endswith("@ensiasd.ac.ma"):
+            flash("Veuillez utiliser votre email institutionnel (@ensiasd.ac.ma).", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        if User.query.filter_by(email=email).first():
+            flash("Cet email est déjà utilisé.", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        if role == "student" and not teacher_id:
+            flash("Veuillez sélectionner votre professeur référent.", "danger")
+            return render_template("register.html", teachers=teachers)
+
+        new_user = User(
+            full_name=full_name,
+            email=email,
+            role=role,
+            teacher_id=int(teacher_id) if (role == "student" and teacher_id) else None,
+        )
+        new_user.set_password(password)
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash("Compte créé avec succès ! Connectez-vous maintenant.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("register.html", teachers=teachers)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -132,7 +179,130 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+@app.route("/settings", methods=["GET", "POST"])
+@login_required()
+def settings():
+    teachers = []
+    if g.user.role == "student":
+        teachers = User.query.filter_by(role="teacher").order_by(User.full_name.asc()).all()
+        user_subs = Submission.query.filter_by(student_id=g.user.id).all()
+        scored = [s.score_global for s in user_subs if s.score_global is not None]
+        account_summary = {
+            "count_label": "Tentatives enregistrées",
+            "count_value": len(user_subs),
+            "avg_value": round(sum(scored) / len(scored), 1) if scored else "-",
+        }
+    else:
+        n_students = User.query.filter_by(role="student", teacher_id=g.user.id).count()
+        n_ex = Exercise.query.filter_by(created_by=g.user.id).count()
+        account_summary = {
+            "count_label": "Élèves supervisés",
+            "count_value": n_students,
+            "avg_value": f"{n_ex} exercices",
+        }
 
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1. Mise à jour du profil et du professeur référent
+        if action == "profile":
+            full_name = request.form.get("full_name", "").strip()
+            if not full_name:
+                flash("Le nom complet ne peut pas être vide.", "error")
+                return redirect(url_for("settings"))
+
+            g.user.full_name = full_name
+
+            if g.user.role == "student":
+                raw_tid = request.form.get("teacher_id", "").strip()
+                if raw_tid.isdigit():
+                    teacher = User.query.filter_by(id=int(raw_tid), role="teacher").first()
+                    if teacher:
+                        g.user.teacher_id = teacher.id
+                    else:
+                        return redirect(url_for("settings", err="teacher_invalid"))
+                else:
+                    return redirect(url_for("settings", err="teacher_invalid"))
+
+            db.session.commit()
+            return redirect(url_for("settings", updated="profile"))
+
+        # 2. Changement de mot de passe
+        elif action == "password":
+            current_pwd = request.form.get("current_password", "")
+            new_pwd = request.form.get("new_password", "")
+            confirm_pwd = request.form.get("confirm_password", "")
+
+            if not g.user.check_password(current_pwd):
+                return redirect(url_for("settings", err="current_pwd"))
+            if len(new_pwd) < 6:
+                return redirect(url_for("settings", err="short_pwd"))
+            if new_pwd != confirm_pwd:
+                return redirect(url_for("settings", err="mismatch_pwd"))
+
+            g.user.set_password(new_pwd)
+            db.session.commit()
+            return redirect(url_for("settings", updated="password"))
+
+        # 3. Export CSV personnel (relevé étudiant ou liste d'élèves enseignant)
+        elif action == "export_personal":
+            output = io.StringIO()
+            writer = csv.writer(output, delimiter=";")
+
+            if g.user.role == "student":
+                writer.writerow(["Exercice", "Score Global (/10)", "Fluidité", "Grammaire", "Prononciation", "WPM", "Statut", "Date"])
+                subs = Submission.query.filter_by(student_id=g.user.id).order_by(Submission.created_at.desc()).all()
+                for s in subs:
+                    writer.writerow([
+                        s.exercise.title,
+                        s.score_global or "",
+                        s.fluency or "",
+                        s.grammar or "",
+                        s.pronunciation or "",
+                        s.wpm or 0,
+                        "Évalué" if s.status == "evalue" else "En attente",
+                        s.created_at.strftime("%d/%m/%Y %H:%M"),
+                    ])
+                fname = f"mon_releve_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+            else:
+                writer.writerow(["Nom complet", "Email", "Nombre de rendus", "Moyenne (/10)"])
+                students = User.query.filter_by(role="student", teacher_id=g.user.id).order_by(User.full_name.asc()).all()
+                for st in students:
+                    st_subs = Submission.query.filter_by(student_id=st.id).all()
+                    sc = [x.score_global for x in st_subs if x.score_global is not None]
+                    avg_st = round(sum(sc) / len(sc), 1) if sc else ""
+                    writer.writerow([st.full_name, st.email, len(st_subs), avg_st])
+                fname = f"mes_etudiants_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+
+            return Response(
+                output.getvalue().encode("utf-8-sig"),
+                mimetype="text/csv; charset=utf-8",
+                headers={"Content-Disposition": f"attachment; filename={fname}"},
+            )
+
+        # 4. Suppression définitive du compte
+        elif action == "delete_account":
+            confirm_del_pwd = request.form.get("delete_password", "")
+            if not g.user.check_password(confirm_del_pwd):
+                return redirect(url_for("settings", err="delete_pwd"))
+
+            user_to_delete = g.user
+            if user_to_delete.role == "student":
+                Submission.query.filter_by(student_id=user_to_delete.id).delete()
+            else:
+                # Détacher les étudiants liés avant suppression du compte enseignant
+                User.query.filter_by(teacher_id=user_to_delete.id).update({"teacher_id": None})
+                for ex in Exercise.query.filter_by(created_by=user_to_delete.id).all():
+                    Submission.query.filter_by(exercise_id=ex.id).delete()
+                    db.session.delete(ex)
+
+            db.session.delete(user_to_delete)
+            db.session.commit()
+            session.clear()
+            flash("Votre compte a été supprimé définitivement.", "ok")
+            return redirect(url_for("login"))
+
+    return render_template("settings.html", teachers=teachers, summary=account_summary)
 # ---------------------------------------------------------------- enseignant
 @app.route("/teacher/dashboard")
 @login_required("teacher")
@@ -140,24 +310,43 @@ def teacher_dashboard():
     flt = request.args.get("filter", "all")
     search = request.args.get("q", "").strip()
     now = datetime.utcnow()
+    teacher_id = g.user.id
 
-    n_students = User.query.filter_by(role="student").count()
-    n_active = Exercise.query.filter_by(is_active=True).count()
-    n_week = Exercise.query.filter(Exercise.created_at >= now - timedelta(days=7)).count()
-    subs = Submission.query.all()
-    avg = db.session.query(func.avg(Submission.score_global)).scalar() or 0
-    rates = [len(s.found_list) / (len(s.found_list) + len(s.missed_list))
-             for s in subs if s.found_list or s.missed_list]
+    n_students = User.query.filter_by(role="student", teacher_id=teacher_id).count()
+    teacher_exercises = Exercise.query.filter_by(created_by=teacher_id)
+    n_active = teacher_exercises.filter_by(is_active=True).count()
+    n_week = teacher_exercises.filter(Exercise.created_at >= now - timedelta(days=7)).count()
+
+    base = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+    )
+
+    subs = base.all()
+    avg = (
+        db.session.query(func.avg(Submission.score_global))
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .scalar()
+        or 0
+    )
+    rates = [
+        len(s.found_list) / (len(s.found_list) + len(s.missed_list))
+        for s in subs
+        if s.found_list or s.missed_list
+    ]
     expected = max(1, n_active * n_students)
     stats = dict(
-        n_active=n_active, n_week=n_week, n_subs=len(subs), avg=round(avg, 1),
+        n_active=n_active,
+        n_week=n_week,
+        n_subs=len(subs),
+        avg=round(avg, 1),
         return_rate=min(100, round(100 * len(subs) / expected)),
         vocab=round(100 * sum(rates) / len(rates)) if rates else 0,
         n_students=n_students,
     )
 
-    base = (Submission.query.join(User, Submission.student_id == User.id)
-            .join(Exercise, Submission.exercise_id == Exercise.id))
     counts = {
         "all": base.count(),
         "a_evaluer": base.filter(Submission.status == "a_evaluer").count(),
@@ -169,12 +358,22 @@ def teacher_dashboard():
     if search:
         like = f"%{search}%"
         q = q.filter(or_(User.full_name.ilike(like), Exercise.title.ilike(like)))
-    rows = q.order_by(Submission.created_at.desc()).limit(50).all()
-    recent = Exercise.query.order_by(Exercise.created_at.desc()).limit(3).all()
 
-    return render_template("teacher_dashboard.html", stats=stats, rows=rows, counts=counts,
-                           flt=flt, search=search, recent=recent, n_students=n_students,
-                           situations=SITUATIONS, levels=LEVELS)
+    rows = q.order_by(Submission.created_at.desc()).limit(50).all()
+    recent = teacher_exercises.order_by(Exercise.created_at.desc()).limit(3).all()
+
+    return render_template(
+        "teacher_dashboard.html",
+        stats=stats,
+        rows=rows,
+        counts=counts,
+        flt=flt,
+        search=search,
+        recent=recent,
+        n_students=n_students,
+        situations=SITUATIONS,
+        levels=LEVELS,
+    )
 
 
 @app.post("/teacher/exercises")
@@ -206,6 +405,8 @@ def create_exercise():
 @login_required("teacher")
 def toggle_exercise(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
+    if ex.created_by != g.user.id:
+        abort(403)
     ex.is_active = not ex.is_active
     db.session.commit()
     return redirect(request.referrer or url_for("exercises"))
@@ -215,6 +416,8 @@ def toggle_exercise(ex_id):
 @login_required("teacher")
 def review(sub_id):
     s = db.get_or_404(Submission, sub_id)
+    if s.exercise.created_by != g.user.id:
+        abort(403)
     s.teacher_comment = request.form.get("comment", "").strip()
     final = request.form.get("final_score", type=float)
     if final is not None and 0 <= final <= 10:
@@ -225,18 +428,171 @@ def review(sub_id):
     return redirect(url_for("feedback", sub_id=s.id))
 
 
+@app.route("/teacher/export/csv")
+@login_required("teacher")
+def export_grades_csv():
+    teacher_id = g.user.id
+
+    rows = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .order_by(User.full_name.asc(), Submission.created_at.desc())
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+
+    writer.writerow([
+        "Étudiant",
+        "Email",
+        "Exercice",
+        "Score Global (/10)",
+        "Fluidité (Fluency)",
+        "Précision Technique",
+        "Grammaire",
+        "Prononciation",
+        "Débit (WPM)",
+        "Statut",
+        "Date",
+    ])
+
+    for s in rows:
+        writer.writerow([
+            s.student.full_name,
+            s.student.email,
+            s.exercise.title,
+            s.score_global if s.score_global is not None else "",
+            s.fluency if s.fluency is not None else "",
+            s.technical_precision if s.technical_precision is not None else "",
+            s.grammar if s.grammar is not None else "",
+            s.pronunciation if s.pronunciation is not None else "",
+            s.wpm or 0,
+            "Évalué" if s.status == "evalue" else "À évaluer",
+            s.created_at.strftime("%d/%m/%Y %H:%M"),
+        ])
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    filename = f"releve_notes_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+
+    return Response(
+        csv_bytes,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.route("/teacher/export/pdf")
+@login_required("teacher")
+def export_grades_pdf():
+    teacher_id = g.user.id
+
+    rows = (
+        Submission.query.join(User, Submission.student_id == User.id)
+        .join(Exercise, Submission.exercise_id == Exercise.id)
+        .filter(Exercise.created_by == teacher_id)
+        .order_by(User.full_name.asc(), Submission.created_at.desc())
+        .all()
+    )
+
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "ENSIASD - CodeSpeak | Relevé des Évaluations Orales", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(
+        0,
+        7,
+        f"Enseignant : {g.user.full_name}   |   Date d'export : {datetime.utcnow().strftime('%d/%m/%Y')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.ln(5)
+
+    headers = [
+        ("Étudiant", 55),
+        ("Exercice", 75),
+        ("Global", 24),
+        ("Fluency", 24),
+        ("Tech.", 24),
+        ("Grammar", 24),
+        ("Pronunc.", 24),
+        ("Statut", 27),
+    ]
+
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 9)
+    for title, width in headers:
+        pdf.cell(width, 9, title, border=1, align="C", fill=True)
+    pdf.ln()
+
+    pdf.set_text_color(15, 23, 42)
+    pdf.set_font("Helvetica", "", 9)
+    for s in rows:
+        student_name = s.student.full_name[:28].encode("latin-1", "replace").decode("latin-1")
+        ex_title = s.exercise.title[:38].encode("latin-1", "replace").decode("latin-1")
+        statut = "Evalue" if s.status == "evalue" else "A evaluer"
+
+        values = [
+            (student_name, 55, "L"),
+            (ex_title, 75, "L"),
+            (str(s.score_global or "-"), 24, "C"),
+            (str(s.fluency or "-"), 24, "C"),
+            (str(s.technical_precision or "-"), 24, "C"),
+            (str(s.grammar or "-"), 24, "C"),
+            (str(s.pronunciation or "-"), 24, "C"),
+            (statut, 27, "C"),
+        ]
+        for val, width, align in values:
+            pdf.cell(width, 8, val, border=1, align=align)
+        pdf.ln()
+
+    pdf_buffer = io.BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+
+    filename = f"releve_notes_codespeak_{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 # ---------------------------------------------------------------- exercices
 @app.route("/exercises")
 @login_required()
 def exercises():
-    q = Exercise.query
     if g.user.role == "student":
-        q = q.filter_by(is_active=True)
-    items = q.order_by(Exercise.created_at.desc()).all()
+        if g.user.teacher_id:
+            items = (
+                Exercise.query.filter_by(
+                    is_active=True,
+                    created_by=g.user.teacher_id,
+                )
+                .order_by(Exercise.created_at.desc())
+                .all()
+            )
+        else:
+            items = []
+    else:
+        items = (
+            Exercise.query.filter_by(created_by=g.user.id)
+            .order_by(Exercise.created_at.desc())
+            .all()
+        )
+
     done = {}
     if g.user.role == "student":
         for s in Submission.query.filter_by(student_id=g.user.id).all():
             done[s.exercise_id] = max(done.get(s.exercise_id, 0), s.score_global or 0)
+
     return render_template("exercises.html", items=items, done=done, situations=SITUATIONS)
 
 
@@ -244,7 +600,9 @@ def exercises():
 @login_required()
 def exercise_detail(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
-    if g.user.role == "student" and not ex.is_active:
+    if g.user.role == "student" and (not ex.is_active or ex.created_by != g.user.teacher_id):
+        abort(404)
+    if g.user.role == "teacher" and ex.created_by != g.user.id:
         abort(404)
     return render_template("exercise_detail.html", ex=ex, situations=SITUATIONS)
 
@@ -253,6 +611,8 @@ def exercise_detail(ex_id):
 @login_required("student")
 def submit(ex_id):
     ex = db.get_or_404(Exercise, ex_id)
+    if not ex.is_active or ex.created_by != g.user.teacher_id:
+        abort(404)
     duration = int(float(request.form.get("duration", 0) or 0))
     transcript = (request.form.get("transcript") or "").strip()
     filename = None
@@ -261,11 +621,14 @@ def submit(ex_id):
         filename = f"{g.user.id}_{int(time.time())}.webm"
         path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         audio.save(path)
+        print("DEBUG AUDIO SAVED: - app.py:624", path, "TAILLE:", os.path.getsize(path), "octets")
         if not transcript:
             transcript = ai_service.transcribe(path)
-    if len(transcript.split()) < 5:
-        return jsonify(error="Transcription vide ou trop courte. Parle plus longtemps ou écris ton texte."), 400
 
+    print("DEBUG TRANSCRIPT REÇU: - app.py:628", repr(transcript))
+
+    if len(transcript.split()) < 5:
+        return jsonify(error=f"Transcription insuffisante ({len(transcript.split())} mots détectés). Vérifiez votre micro ou utilisez Chrome/Edge."), 400
     r = ai_service.analyze(transcript, ex, duration)
     sub = Submission(
         exercise_id=ex.id, student_id=g.user.id, audio_filename=filename,
@@ -284,8 +647,6 @@ def submit(ex_id):
     db.session.add(sub)
     db.session.commit()
     return jsonify(url=url_for("feedback", sub_id=sub.id))
-
-
 # ---------------------------------------------------------------- feedback
 @app.route("/feedback")
 @login_required()
@@ -293,6 +654,8 @@ def feedback_latest():
     q = Submission.query
     if g.user.role == "student":
         q = q.filter_by(student_id=g.user.id)
+    else:
+        q = q.join(Exercise, Submission.exercise_id == Exercise.id).filter(Exercise.created_by == g.user.id)
     s = q.order_by(Submission.created_at.desc()).first()
     if not s:
         return render_template("empty.html", message="No recordings available yet.")
@@ -305,6 +668,8 @@ def feedback(sub_id):
     s = db.get_or_404(Submission, sub_id)
     if g.user.role == "student" and s.student_id != g.user.id:
         abort(403)
+    if g.user.role == "teacher" and s.exercise.created_by != g.user.id:
+        abort(403)
     paragraphs = [highlight(p, s.issues, s.found_list)
                   for p in (s.transcript or "").split("\n\n") if p.strip()]
     return render_template("feedback.html", s=s, paragraphs=paragraphs)
@@ -316,6 +681,8 @@ def audio(filename):
     s = Submission.query.filter_by(audio_filename=filename).first_or_404()
     if g.user.role == "student" and s.student_id != g.user.id:
         abort(403)
+    if g.user.role == "teacher" and s.exercise.created_by != g.user.id:
+        abort(403)
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
@@ -325,13 +692,15 @@ def audio(filename):
 def progress():
     students = []
     if g.user.role == "teacher":
-        students = User.query.filter_by(role="student").order_by(User.full_name).all()
+        students = User.query.filter_by(role="student", teacher_id=g.user.id).order_by(User.full_name).all()
         sid = request.args.get("student_id", type=int)
         if not sid:
             with_subs = [st for st in students if Submission.query.filter_by(student_id=st.id).first()]
             sid = (with_subs or students or [None])[0]
             sid = sid.id if sid else None
         student = db.session.get(User, sid) if sid else None
+        if student and student.teacher_id != g.user.id:
+            abort(403)
     else:
         student = g.user
     if not student:
@@ -391,7 +760,7 @@ def delete_submission(sub_id):
             if os.path.isfile(audio_path):
                 os.remove(audio_path)
         except OSError as e:
-            print("Erreur suppression audio :", e)
+            print("Erreur suppression audio : - app.py:763", e)
 
     return redirect(url_for("progress"))
 
@@ -401,7 +770,7 @@ def seed_command():
     """Remplit la base avec des donnees de demonstration."""
     from seed import run
     run()
-    print("Base de demonstration creee.")
+    print("Base de demonstration creee. - app.py:773")
 
 
 if __name__ == "__main__":
