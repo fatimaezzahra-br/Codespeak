@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 {% from "_macros.html" import score_pill, chip %}
-{% block title %}Dashboard Enseignant{% endblock %}
+{% block title %}Teacher Dashboard{% endblock %}
 {% block content %}
 <section class="bg-gradient-to-br from-white to-lav/60 rounded-3xl p-6 shadow-sm">
-  <span class="text-[11px] font-mono bg-brand text-white rounded-full px-3 py-1">SESSION EN COURS</span>
+  <span class="text-[11px] font-mono bg-brand text-white rounded-full px-3 py-1">CURRENT SESSION</span>
   <div class="flex flex-wrap justify-between items-end gap-3 mt-3">
     <div>
-      <h1 class="text-3xl font-extrabold">Espace Enseignant • {{ user.full_name.replace('Pr. M.', 'Pr. Mohammed') }}</h1>
-      <p class="text-sm text-slate-500 mt-1">Supervision de la compétence orale en anglais technique pour les ingénieurs.</p>
+      <h1 class="text-3xl font-extrabold">Teacher Dashboard • {{ user.full_name.replace('Pr. M.', 'Pr. Mohammed') }}</h1>
+      <p class="text-sm text-slate-500 mt-1">Monitoring engineering students' technical English speaking skills.</p>
     </div>
-    <span class="bg-white rounded-full px-4 py-2 text-sm font-semibold shadow-sm">{{ stats.n_students }} élèves inscrits</span>
+    <span class="bg-white rounded-full px-4 py-2 text-sm font-semibold shadow-sm">{{ stats.n_students }} enrolled students</span>
   </div>
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Exercices actifs</p><p class="text-3xl font-extrabold">{{ stats.n_active }} <span class="text-[11px] font-mono text-brand">+{{ stats.n_week }} cette sem.</span></p></div>
-    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Enregistrements reçus</p><p class="text-3xl font-extrabold">{{ stats.n_subs }} <span class="text-[11px] font-mono text-brand">{{ stats.return_rate }}% taux retour</span></p></div>
-    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Moyenne Spoken Tech</p><p class="text-3xl font-extrabold">{{ stats.avg }} <span class="text-sm font-normal text-slate-400">/ 10</span></p></div>
-    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Vocabulaire technique</p><p class="text-3xl font-extrabold">{{ stats.vocab }}%</p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Active Exercises</p><p class="text-3xl font-extrabold">{{ stats.n_active }} <span class="text-[11px] font-mono text-brand">+{{ stats.n_week }} this week</span></p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Recordings Received</p><p class="text-3xl font-extrabold">{{ stats.n_subs }} <span class="text-[11px] font-mono text-brand">{{ stats.return_rate }}% Return Rate</span></p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Average Speaking Score</p><p class="text-3xl font-extrabold">{{ stats.avg }} <span class="text-sm font-normal text-slate-400">/ 10</span></p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">Technical Vocabulary</p><p class="text-3xl font-extrabold">{{ stats.vocab }}%</p></div>
   </div>
 </section>
 
 <div class="grid lg:grid-cols-[1.4fr_1fr] gap-6 mt-6">
-  <!-- Formulaire de creation -->
+  <!-- Exercise Creation Form -->
   <form method="post" action="{{ url_for('create_exercise') }}" class="bg-white rounded-2xl p-6 shadow-sm space-y-5">
     <div>
-      <p class="text-[11px] font-mono font-bold text-brand">PARAMÉTRAGE DE SCÉNARIO ORAL</p>
-      <h2 class="text-2xl font-extrabold">Créer un exercice d'expression orale</h2>
+      <p class="text-[11px] font-mono font-bold text-brand">ORAL EXERCISE CONFIGURATION</p>
+      <h2 class="text-2xl font-extrabold">Create an Oral Communication Exercise</h2>
     </div>
-    <label class="block text-sm font-semibold">Intitulé du scénario
-      <input name="title" required class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal" placeholder="ex: Sprint Retrospective & Cloud Migration Bug Briefing"></label>
+    <label class="block text-sm font-semibold">Scenario Title
+      <input name="title" required class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal" placeholder="e.g. Business Meeting & Project Presentation"></label>
 
     <div>
-      <p class="text-sm font-semibold mb-2">Situation d'ingénierie & objectif communicationnel</p>
+      <p class="text-sm font-semibold mb-2">Professional Situation & Communication Objective</p>
       <div class="grid sm:grid-cols-3 gap-2">
         {% for key, (name, desc) in situations.items() %}
         <label><input type="radio" name="situation" value="{{ key }}" class="peer sr-only" {{ 'checked' if loop.first }}>
@@ -42,49 +42,49 @@
 
     <div class="grid sm:grid-cols-2 gap-5">
       <div>
-        <p class="text-sm font-semibold mb-2">Niveau CECRL ciblé</p>
+        <p class="text-sm font-semibold mb-2">Target CEFR Level</p>
         <div class="grid grid-cols-4 gap-1">
           {% for l in levels %}<label><input type="radio" name="level" value="{{ l }}" class="peer sr-only" {{ 'checked' if l == 'B2' }}>
             <div class="text-center text-sm py-2 rounded-lg bg-lav/50 cursor-pointer peer-checked:bg-brand peer-checked:text-white font-semibold">{{ l }}</div></label>{% endfor %}
         </div>
       </div>
       <div>
-        <p class="text-sm font-semibold mb-2 flex justify-between">Temps de parole alloué <span id="dur-label" class="font-mono text-brand text-xs">90 secondes</span></p>
+        <p class="text-sm font-semibold mb-2 flex justify-between">Allocated Speaking Time <span id="dur-label" class="font-mono text-brand text-xs">90 seconds</span></p>
         <input id="duration" name="duration" type="range" min="30" max="180" step="10" value="90" class="w-full accent-emerald-700">
       </div>
     </div>
 
     <div>
-      <p class="text-sm font-semibold mb-2">Mots-clés & vocabulaire technique obligatoire <span class="font-normal text-xs text-slate-400">(Entrée pour ajouter)</span></p>
+      <p class="text-sm font-semibold mb-2">Required Keywords & Technical Vocabulary <span class="font-normal text-xs text-slate-400">(Press Enter to add)</span></p>
       <div id="tags" class="flex flex-wrap items-center gap-2 bg-lav/40 rounded-lg p-2">
-        <input id="tag-input" class="bg-transparent outline-none text-sm flex-1 min-w-[120px] px-1" placeholder="+ ajouter un mot...">
+        <input id="tag-input" class="bg-transparent outline-none text-sm flex-1 min-w-[120px] px-1" placeholder="+ add a word...">
       </div>
       <input type="hidden" name="keywords" id="keywords">
-      <div class="flex flex-wrap gap-2 mt-2 text-xs"><span class="text-slate-400">Suggestions rapides :</span>
+      <div class="flex flex-wrap gap-2 mt-2 text-xs"><span class="text-slate-400">Quick Suggestions:</span>
         {% for s in ['bottleneck','edge case','concurrency','throughput'] %}<button type="button" data-tag="{{ s }}" class="sugg bg-lav/60 rounded px-2 py-1 font-mono">+ {{ s }}</button>{% endfor %}
       </div>
     </div>
 
-    <label class="block text-sm font-semibold">Consignes d'élocution & contexte de la simulation
-      <textarea name="instructions" rows="3" class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal" placeholder="Structurez votre discours : 1. Description du problème, 2. Hypothèse technique, 3. Solution et métriques."></textarea></label>
+    <label class="block text-sm font-semibold">Speaking Instructions & Simulation Context
+      <textarea name="instructions" rows="3" class="mt-1 w-full bg-lav/40 rounded-lg px-3 py-2.5 font-normal" placeholder="Structure your speech: 1. Describe the problem, 2. Explain your technical hypothesis, 3. Present the solution and metrics."></textarea></label>
     <div class="flex items-center justify-between">
-      <span class="text-xs text-slate-500">Distribution directe à toute la classe MGSI-1</span>
-      <button class="bg-brand text-white font-semibold rounded-lg px-5 py-2.5 hover:opacity-90">Créer l'exercice (Publish to MGSI-1)</button>
+      <span class="text-xs text-slate-500">Automatically assigned to the entire MGSI-1 class</span>
+      <button class="bg-brand text-white font-semibold rounded-lg px-5 py-2.5 hover:opacity-90">Create Exercise (Publish to MGSI-1)</button>
     </div>
   </form>
 
-  <!-- Colonne droite -->
+  <!-- Right Column -->
   <div class="space-y-6">
-    <div class="bg-lav/60 rounded-2xl p-4 text-xs text-slate-600"><b class="text-brand">Critères d'évaluation CodeSpeak MGSI</b><br>4 dimensions : précision lexicale, fluency (WPM et pauses), phonétique et syntaxe technique.</div>
+    <div class="bg-lav/60 rounded-2xl p-4 text-xs text-slate-600"><b class="text-brand">CodeSpeak MGSI Assessment Criteria</b><br>4 dimensions: vocabulary accuracy, fluency (WPM and pauses), pronunciation, and technical grammar.</div>
     <div class="bg-white rounded-2xl p-5 shadow-sm">
-      <h3 class="font-bold mb-3">Exercices en ligne</h3>
+      <h3 class="font-bold mb-3">Published Exercises</h3>
       <div class="space-y-3">
         {% for e in recent %}
         <a href="{{ url_for('exercise_detail', ex_id=e.id) }}" class="block bg-lav/40 rounded-xl p-3">
           <div class="flex justify-between text-[11px] font-mono"><span class="bg-lav rounded px-2">{{ e.level }} · {{ e.duration }}s</span><span class="text-slate-400">{{ e.created_at|fdate }}</span></div>
           <p class="font-semibold text-sm mt-2">{{ e.title }}</p>
           <div class="flex flex-wrap gap-1 mt-1">{% for k in e.keyword_list[:3] %}<span class="text-[10px] font-mono text-slate-500">#{{ k }}</span>{% endfor %}</div>
-          <div class="flex justify-between text-xs mt-2"><span>{{ e.submissions|length }}/{{ n_students }} rendus</span><b class="text-indigo-600">{% if e.avg_score %}Moyenne : {{ e.avg_score }}/10{% endif %}</b></div>
+          <div class="flex justify-between text-xs mt-2"><span>{{ e.submissions|length }}/{{ n_students }} submissions</span><b class="text-indigo-600">{% if e.avg_score %}Average: {{ e.avg_score }}/10{% endif %}</b></div>
         </a>
         {% endfor %}
       </div>
@@ -92,7 +92,7 @@
   </div>
 </div>
 
-<!-- Soumissions -->
+<!-- Student Submissions -->
 <section class="bg-white rounded-2xl p-6 shadow-sm mt-6">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-4">
     <div><p class="text-[11px] font-mono font-bold text-brand">SOUMISSIONS DES ÉTUDIANTS (MGSI-1)</p>
@@ -108,11 +108,13 @@
         Exporter Bulletin (PDF)
       </a>
     
+    <div><p class="text-[11px] font-mono font-bold text-brand">STUDENT SUBMISSIONS (MGSI-1)</p>
+      <h2 class="text-2xl font-extrabold">Assessments & Audio Recordings</h2></div>
     <form method="get" class="flex gap-2 items-center text-sm">
       <input type="hidden" name="filter" value="{{ flt }}">
-      <input name="q" value="{{ search }}" placeholder="Rechercher par élève ou sujet..." class="bg-lav/40 rounded-full px-4 py-2 w-64">
+      <input name="q" value="{{ search }}" placeholder="Search by student or topic..." class="bg-lav/40 rounded-full px-4 py-2 w-64">
       <div class="flex bg-lav/50 rounded-full p-1 text-xs font-semibold">
-        {% for key, label in [('all','Tous'),('a_evaluer','À évaluer'),('evalue','Évalué')] %}
+        {% for key, label in [('all','All'),('a_evaluer','To Review'),('evalue','Reviewed')] %}
         <a href="{{ url_for('teacher_dashboard', filter=key, q=search) }}" class="px-3 py-1.5 rounded-full {{ 'bg-white shadow' if flt == key }}">{{ label }} ({{ counts[key] }})</a>{% endfor %}
       </div>
       </div>
@@ -120,7 +122,7 @@
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
-      <thead class="text-[11px] text-slate-400 uppercase text-left"><tr><th class="py-2">Élève</th><th>Situation / sujet</th><th>Date & durée</th><th>Niveau</th><th>Vocabulaire clé</th><th>Note IA/Prof</th><th>Audio & action</th></tr></thead>
+      <thead class="text-[11px] text-slate-400 uppercase text-left"><tr><th class="py-2">Student</th><th>Situation / Topic</th><th>Date & Duration</th><th>Level</th><th>Key Vocabulary</th><th>AI/Teacher Score</th><th>Audio & Action</th></tr></thead>
       <tbody class="divide-y divide-slate-100">
       {% for s in rows %}
         <tr class="align-top">
@@ -128,13 +130,13 @@
           <td class="pr-3"><b>{{ s.exercise.title.split(':')[0] }}</b><br><span class="text-xs text-slate-500">{{ s.exercise.title.split(':')[1] if ':' in s.exercise.title }}</span></td>
           <td class="font-mono text-xs">{{ s.created_at|fdate }}<br><span class="text-brand">{{ s.duration }}s / {{ s.exercise.duration }}s</span></td>
           <td>{{ chip(s.exercise.level) }}</td>
-          <td class="space-y-1">{% for v in s.found_list[:3] %}{{ chip(v, 'ok') }} {% endfor %}{% for v in s.missed_list[:1] %}{{ chip('-' ~ v ~ ' omis', 'bad') }}{% endfor %}</td>
+          <td class="space-y-1">{% for v in s.found_list[:3] %}{{ chip(v, 'ok') }} {% endfor %}{% for v in s.missed_list[:1] %}{{ chip('-' ~ v ~ ' missing', 'bad') }}{% endfor %}</td>
           <td>{{ score_pill(s.score_global) }}</td>
           <td><div class="flex items-center gap-2">
             {% if s.audio_filename %}<audio controls preload="none" class="h-8 w-40" src="{{ url_for('audio', filename=s.audio_filename) }}"></audio>{% endif %}
-            <a href="{{ url_for('feedback', sub_id=s.id) }}" class="text-xs rounded-lg px-3 py-1.5 font-semibold {{ 'bg-brand text-white' if s.status == 'a_evaluer' else 'bg-lav' }}">{{ 'Corriger' if s.status == 'a_evaluer' else 'Feedback' }}</a></div></td>
+            <a href="{{ url_for('feedback', sub_id=s.id) }}" class="text-xs rounded-lg px-3 py-1.5 font-semibold {{ 'bg-brand text-white' if s.status == 'a_evaluer' else 'bg-lav' }}">{{ 'Review' if s.status == 'a_evaluer' else 'Feedback' }}</a></div></td>
         </tr>
-      {% else %}<tr><td colspan="7" class="py-6 text-center text-slate-400">Aucune soumission.</td></tr>{% endfor %}
+      {% else %}<tr><td colspan="7" class="py-6 text-center text-slate-400">No submissions available.</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

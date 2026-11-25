@@ -138,9 +138,9 @@ def rule_based_analysis(transcript, stats, keywords):
     precision = 5 + 5 * coverage
     pronunciation = (fluency + grammar) / 2  # estimation (pas d'analyse des sons)
     if stats["missed"]:
-        suggestion = "Essaie d'utiliser aussi : " + ", ".join(stats["missed"][:3]) + "."
+        suggestion = "Try using these terms as well: " + ", ".join(stats["missed"][:3]) + "."
     else:
-        suggestion = "Très bon vocabulaire. Essaie des collocations plus soutenues."
+        suggestion = "Very good vocabulary. Try using more advanced collocations."
     return dict(
         fluency=fluency, grammar=grammar, technical_precision=precision,
         pronunciation=pronunciation, issues=issues, suggestion=suggestion,
