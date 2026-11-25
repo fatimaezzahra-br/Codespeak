@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let mediaRecorder = null;
   let audioChunks = [];
-  let recognition = null;
+  // SpeechRecognition disabled: transcription is handled by Faster-Whisper on the server. let recognition = null;
   let isRecording = false;
   let finalTranscript = "";
   let interimTranscript = "";
@@ -30,47 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${m}:${sec}`;
   }
 
-  function setupSpeechRecognition() {
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) return null;
-
-    const rec = new SpeechRec();
-    rec.lang = "en-US";
-    rec.continuous = true;
-    rec.interimResults = true;
-
-    rec.onresult = (event) => {
-      interimTranscript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const piece = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += piece + " ";
-        } else {
-          interimTranscript += piece;
-        }
-      }
-      const preview = (finalTranscript + interimTranscript).trim();
-      if (preview) {
-        liveBox.classList.remove("hidden");
-        liveBox.textContent = "Texte détecté : " + preview;
-      }
-    };
-
-    // Relance automatique si Chrome coupe l'écoute pendant une pause
-    rec.onend = () => {
-      if (isRecording) {
-        try {
-          rec.start();
-        } catch (_) {}
-      }
-    };
-
-    rec.onerror = (e) => {
-      console.warn("SpeechRecognition warning: - recorder.js:69", e.error);
-    };
-
-    return rec;
-  }
+  
 
   async function startRecording() {
     try {
@@ -91,19 +51,14 @@ document.addEventListener("DOMContentLoaded", () => {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(audioChunks, { type: "audio/webm" });
-        const fullText = (finalTranscript + " " + interimTranscript).trim();
+        const fullText = "";
         await sendSubmission(blob, fullText, seconds);
       };
 
       mediaRecorder.start();
       isRecording = true;
 
-      recognition = setupSpeechRecognition();
-      if (recognition) {
-        try {
-          recognition.start();
-        } catch (_) {}
-      }
+      
 
       recBtn.textContent = "⏹";
       recBtn.classList.add("animate-pulse", "bg-rose-600");
@@ -125,11 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
     isRecording = false;
     clearInterval(timerInterval);
 
-    if (recognition) {
-      try {
-        recognition.stop();
-      } catch (_) {}
-    }
+    
 
     recBtn.textContent = "🎙";
     recBtn.classList.remove("animate-pulse", "bg-rose-600");

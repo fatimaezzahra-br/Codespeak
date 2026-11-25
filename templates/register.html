@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Inscription{% endblock %}
+{% block title %}Register{% endblock %}
 {% block nav %}{% endblock %}
 {% block content %}
 <div class="grid lg:grid-cols-[1fr_1.2fr] gap-6 max-w-5xl mx-auto mt-6">
@@ -9,56 +9,56 @@
         <div class="w-10 h-10 rounded-xl bg-brand text-white grid place-items-center font-mono">&gt;_</div>
         <div>
           <div class="font-bold text-lg">CodeSpeak</div>
-          <div class="text-[11px] font-mono text-slate-500">ENSIASD • LABORATOIRE MGSI</div>
+          <div class="text-[11px] font-mono text-slate-500">ENSIASD • MGSI LABORATORY</div>
         </div>
       </div>
       <h2 class="text-2xl font-bold">Oral Mastery for Engineers</h2>
-      <p class="text-sm text-slate-600 mt-2">Plateforme interactive d'anglais professionnel dédiée au cycle ingénieur de l'ENSIASD.</p>
+      <p class="text-sm text-slate-600 mt-2">Interactive professional English platform designed for ENSIASD engineering students.</p>
       <div class="bg-white rounded-xl p-4 mt-6">
-        <b class="text-sm">Communication Technique</b>
-        <p class="text-xs text-slate-500">System design pitch, architectural defense & analyse de la parole.</p>
+        <b class="text-sm">Technical Communication</b>
+        <p class="text-xs text-slate-500">System design presentations, architectural defense & speech analysis.</p>
       </div>
       <div class="bg-white rounded-xl p-4 mt-3">
-        <b class="text-sm">Évaluation Continue par IA</b>
-        <p class="text-xs text-slate-500">Notation automatisée du vocabulaire et de la grammaire.</p>
+        <b class="text-sm">Continuous AI Assessment</b>
+        <p class="text-xs text-slate-500">Automated vocabulary and grammar assessment.</p>
       </div>
     </div>
-    <p class="text-[11px] font-mono text-slate-500">CYCLE INGÉNIEUR • S2 · MGSI-1</p>
+    <p class="text-[11px] font-mono text-slate-500">ENGINEERING PROGRAM • S2 · MGSI-1</p>
   </aside>
 
   <section class="bg-white rounded-2xl p-8 shadow-sm">
-    <p class="text-[11px] font-mono font-bold text-brand">PORTAIL D'INSCRIPTION</p>
-    <h1 class="text-3xl font-extrabold mb-5">Créer un compte MGSI</h1>
+    <p class="text-[11px] font-mono font-bold text-brand">REGISTRATION PORTAL</p>
+    <h1 class="text-3xl font-extrabold mb-5">Create an MGSI Account</h1>
 
     <form method="post" action="{{ url_for('register') }}" class="space-y-4">
       <div class="grid grid-cols-2 gap-1 bg-lav/60 rounded-xl p-1 text-sm font-semibold">
         <label>
           <input type="radio" name="profile" value="teacher" class="peer sr-only" onchange="toggleTeacherField()">
-          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Enseignant</div>
+          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Teacher</div>
         </label>
         <label>
           <input type="radio" name="profile" value="student" class="peer sr-only" checked onchange="toggleTeacherField()">
-          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Élève Ingénieur</div>
+          <div class="text-center py-2 rounded-lg cursor-pointer peer-checked:bg-white peer-checked:shadow">Engineering Student</div>
         </label>
       </div>
 
-      <label class="block text-sm font-semibold">Nom complet
+      <label class="block text-sm font-semibold">Full Name
         <input id="name" name="name" type="text" required
                class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-               placeholder="Prénom et Nom">
+               placeholder="First and Last Name">
       </label>
 
-      <label class="block text-sm font-semibold">Email institutionnel ENSIASD
+      <label class="block text-sm font-semibold">ENSIASD Institutional Email
         <input id="email" name="email" type="email" required autocomplete="email"
                class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-               placeholder="prenom.nom@ensiasd.ac.ma">
+               placeholder="first.last@ensiasd.ac.ma">
       </label>
 
       <div id="teacher-select-box">
-        <label class="block text-sm font-semibold">Professeur référent
+        <label class="block text-sm font-semibold">Assigned Teacher
           <select id="teacher_id" name="teacher_id"
                   class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900">
-            <option value="">-- Choisir votre professeur --</option>
+            <option value="">-- Select Your Teacher --</option>
             {% for t in teachers %}
               <option value="{{ t.id }}">{{ t.full_name }}</option>
             {% endfor %}
@@ -66,20 +66,20 @@
         </label>
       </div>
 
-      <label class="block text-sm font-semibold">Mot de passe académique
+      <label class="block text-sm font-semibold">Academic Password
         <input id="pwd" name="password" type="password" required minlength="6" autocomplete="new-password"
                class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 font-normal focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
                placeholder="••••••••">
       </label>
 
       <button type="submit" class="w-full bg-brand text-white font-semibold rounded-lg py-3 hover:opacity-90 transition">
-        Créer mon compte MGSI →
+        Create My MGSI Account →
       </button>
     </form>
 
     <p class="text-center text-sm text-slate-600 mt-5">
-      Déjà inscrit sur la plateforme ?
-      <a href="{{ url_for('login') }}" class="font-semibold text-brand hover:underline">Se connecter</a>
+      Already have an account?
+      <a href="{{ url_for('login') }}" class="font-semibold text-brand hover:underline">Log In</a>
     </p>
   </section>
 </div>
