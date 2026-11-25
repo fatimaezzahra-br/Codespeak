@@ -349,10 +349,10 @@ def progress():
         return dict(avg=round(sum(vals) / len(vals), 1), delta=round(vals[-1] - vals[0], 1))
 
     criteria = [
-        ("Grammaire technique & précision", "grammar", crit("grammar")),
-        ("Prononciation & aisance", "pronunciation", crit("pronunciation")),
-        ("Fluidité & débit (WPM)", "fluency", crit("fluency")),
-        ("Lexique ingénierie & data", "technical_precision", crit("technical_precision")),
+        ("Technical Grammar & Accuracy", "grammar", crit("grammar")),
+        ("Pronunciation & Confidence", "pronunciation", crit("pronunciation")),
+        ("Fluency & Speaking Rate (WPM)", "fluency", crit("fluency")),
+        ("Engineering & Data Vocabulary", "technical_precision", crit("technical_precision")),
     ]
     terms = {t.lower() for s in subs for t in s.found_list}
     last_comment = next((s for s in reversed(subs) if s.teacher_comment), None)
