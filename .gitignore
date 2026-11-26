@@ -6,3 +6,5 @@ uploads/*
 !uploads/.gitkeep
 venv/
 .venv/
+build/
+dist/

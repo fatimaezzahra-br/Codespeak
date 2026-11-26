@@ -6,6 +6,8 @@ Ordre de priorite :
 """
 import json
 import re
+import os
+import sys
 
 from config import Config
 
@@ -41,9 +43,19 @@ def transcribe(path):
         from faster_whisper import WhisperModel
 
         if _whisper_model is None:
-            print("Chargement du modèle Whisper local (tiny/base)... - ai_service.py:44")
+            if getattr(sys, "frozen", False):
+                model_path = os.path.join(
+                    sys._MEIPASS,
+                    "models",
+                    "faster-whisper-tiny"
+                )
+            else:
+                model_path = "tiny"
+
+            print(f"Chargement du modèle Whisper : {model_path}")
+
             _whisper_model = WhisperModel(
-                "tiny",  # Plus rapide et léger (75 Mo) que "base"
+                model_path,
                 device="cpu",
                 compute_type="int8"
             )

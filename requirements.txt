@@ -8,3 +8,4 @@ openai>=1.40
 PySide6
 PySide6-WebEngine
 faster-whisper
+fpdf2>=2.8
